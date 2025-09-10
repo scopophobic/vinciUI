@@ -32,11 +32,16 @@ export function ImageInputNode({ data }: ImageInputNodeProps) {
   };
 
   return (
-    <div className="p-4 border-2 border-green-200 rounded-lg bg-white shadow-lg w-64 hover:shadow-xl transition-shadow">
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-green-500" />
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-xl">🖼️</span>
-        <label className="font-bold text-gray-800">Image Input</label>
+    <div className="p-4 border border-gray-600 bg-black w-72 font-mono">
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        className="w-3 h-3 bg-white border border-gray-500" 
+      />
+      <div className="mb-3">
+        <label className="text-white text-xs font-bold tracking-wider uppercase">
+          IMAGE INPUT
+        </label>
       </div>
       
       <input
@@ -49,19 +54,21 @@ export function ImageInputNode({ data }: ImageInputNodeProps) {
       
       <div 
         onClick={handleClick}
-        className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors"
+        className="w-full h-32 border border-dashed border-gray-700 bg-gray-900 flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors"
       >
         {data.imageBase64 ? (
           <img 
             src={`data:image/png;base64,${data.imageBase64}`} 
             alt="Uploaded" 
-            className="max-w-full max-h-full object-contain rounded"
+            className="max-w-full max-h-full object-contain"
           />
         ) : (
           <>
-            <span className="text-3xl text-gray-400 mb-2">📁</span>
-            <span className="text-sm text-gray-500 text-center">
-              Click to upload an image
+            <div className="w-8 h-8 border border-gray-600 mb-2 flex items-center justify-center">
+              <span className="text-gray-500 text-xs">IMG</span>
+            </div>
+            <span className="text-xs text-gray-500 text-center font-mono">
+              CLICK TO UPLOAD
             </span>
           </>
         )}

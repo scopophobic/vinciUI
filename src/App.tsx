@@ -268,15 +268,55 @@ function App() {
     }
   };
 
+  const addPromptNode = () => {
+    const newId = `prompt-${Date.now()}`;
+    const newNode: Node = {
+      id: newId,
+      type: 'prompt',
+      position: { x: Math.random() * 300 + 50, y: Math.random() * 300 + 50 },
+      data: {
+        prompt: '',
+        onChange: (data: any) => updateNodeData(newId, data)
+      }
+    };
+    setNodes(nds => [...nds, newNode]);
+  };
+
+  const addImageNode = () => {
+    const newId = `image-${Date.now()}`;
+    const newNode: Node = {
+      id: newId,
+      type: 'imageInput',
+      position: { x: Math.random() * 300 + 50, y: Math.random() * 300 + 200 },
+      data: {
+        imageBase64: '',
+        onChange: (data: any) => updateNodeData(newId, data)
+      }
+    };
+    setNodes(nds => [...nds, newNode]);
+  };
+
   return (
-    <div style={{ width: '100vw', height: '100vh' }} className="bg-gray-50">
+    <div style={{ width: '100vw', height: '100vh' }} className="bg-black">
       <ReactFlowProvider>
-        <div className="absolute top-4 left-4 z-10 flex gap-2">
+        <div className="absolute top-4 left-4 z-10 flex gap-3">
           <button
             onClick={handleGenerate}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors"
+            className="px-6 py-2 bg-white text-black border border-gray-300 hover:bg-gray-100 transition-colors font-mono text-sm tracking-wide"
           >
-            🚀 Generate
+            GENERATE
+          </button>
+          <button
+            onClick={addPromptNode}
+            className="px-4 py-2 bg-transparent text-white border border-gray-600 hover:bg-gray-900 transition-colors font-mono text-sm tracking-wide"
+          >
+            + PROMPT
+          </button>
+          <button
+            onClick={addImageNode}
+            className="px-4 py-2 bg-transparent text-white border border-gray-600 hover:bg-gray-900 transition-colors font-mono text-sm tracking-wide"
+          >
+            + IMAGE
           </button>
         </div>
         <ReactFlow
@@ -287,10 +327,24 @@ function App() {
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           fitView
-          className="bg-gray-100"
+          className="bg-black"
+          defaultEdgeOptions={{
+            style: { strokeWidth: 2, stroke: '#666' },
+            type: 'smoothstep'
+          }}
         >
-          <Controls />
-          <Background gap={20} size={1} color="#e5e7eb" />
+          <Controls 
+            className="bg-black border border-gray-700"
+            style={{
+              button: { backgroundColor: '#000', border: '1px solid #666', color: '#fff' }
+            }}
+          />
+          <Background 
+            gap={12} 
+            size={0.5} 
+            color="#333" 
+            style={{ backgroundColor: '#000' }}
+          />
         </ReactFlow>
       </ReactFlowProvider>
     </div>
