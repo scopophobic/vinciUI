@@ -22,8 +22,8 @@ export function OutputNode({ data }: OutputNodeProps) {
   };
 
   return (
-    <div className="p-4 border border-gray-300 bg-white shadow-sm w-64 hover:shadow-md transition-shadow font-mono">
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-black" />
+    <div className="p-4 border border-orange-200 bg-white shadow-lg rounded-lg w-64 hover:shadow-xl transition-all duration-300 font-mono" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.1), 0 0 0 1px rgba(249, 115, 22, 0.1)' }}>
+      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-orange-500" />
       
       <div className="flex items-center mb-3">
         <label className="text-sm font-mono uppercase tracking-wide text-black">Output</label>

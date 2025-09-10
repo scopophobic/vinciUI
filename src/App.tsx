@@ -329,8 +329,8 @@ function App() {
           fitView
           className="bg-white"
           defaultEdgeOptions={{
-            type: 'smoothstep',
-            style: { strokeWidth: 2, stroke: '#333' },
+            type: 'bezier',
+            style: { strokeWidth: 1.5, stroke: '#666' },
             animated: false
           }}
         >
