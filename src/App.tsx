@@ -125,7 +125,8 @@ function App() {
         // JavaScript/TypeScript is case-sensitive, so `apikey` and `apiKey` are different variables.
         // To fix this, declare the variable as `apiKey`:
 
-        const apiKey: string = "AIzaSyC5BghiKZSW93zzwcM3DEilUR_g98XA8vc";
+        // API KEY IS LOADED FROM THE ENV FILE
+        const apiKey: string = import.meta.env.VITE_GEMINI_API_KEY;
         console.log('API Key loaded:', apiKey ? `${apiKey.slice(0, 10)}...` : 'NOT FOUND');
         
         if (apiKey && apiKey !== 'your_gemini_api_key_here' && apiKey !== 'your_actual_api_key_here') {
