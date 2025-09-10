@@ -22,20 +22,14 @@ export function OutputNode({ data }: OutputNodeProps) {
   };
 
   return (
-    <div className="p-4 border border-gray-600 bg-black w-72 font-mono">
-      <Handle 
-        type="target" 
-        position={Position.Left} 
-        className="w-3 h-3 bg-white border border-gray-500" 
-      />
+    <div className="p-4 border border-gray-300 bg-white shadow-sm w-64 hover:shadow-md transition-shadow font-mono">
+      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-black" />
       
-      <div className="mb-3">
-        <label className="text-white text-xs font-bold tracking-wider uppercase">
-          OUTPUT
-        </label>
+      <div className="flex items-center mb-3">
+        <label className="text-sm font-mono uppercase tracking-wide text-black">Output</label>
       </div>
       
-      <div className="w-full h-48 border border-dashed border-gray-700 bg-gray-900 flex items-center justify-center">
+      <div className="w-full h-48 border border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
         {data.imageUrl ? (
           <img 
             src={data.imageUrl} 
@@ -44,11 +38,9 @@ export function OutputNode({ data }: OutputNodeProps) {
           />
         ) : (
           <div className="text-center">
-            <div className="w-12 h-12 border border-gray-600 mb-3 flex items-center justify-center mx-auto">
-              <span className="text-gray-500 text-xs">OUT</span>
-            </div>
+            <div className="w-12 h-12 border border-gray-400 mb-2 mx-auto"></div>
             <span className="text-xs text-gray-500 font-mono">
-              GENERATED IMAGE WILL APPEAR HERE
+              Output appears here
             </span>
           </div>
         )}
@@ -57,9 +49,9 @@ export function OutputNode({ data }: OutputNodeProps) {
       {data.imageUrl && (
         <button
           onClick={handleDownload}
-          className="w-full mt-3 px-3 py-2 border border-gray-600 text-white hover:bg-gray-900 transition-colors text-xs font-mono tracking-wide"
+          className="w-full mt-3 px-3 py-2 bg-black text-white text-xs font-mono uppercase tracking-wide hover:bg-gray-800 transition-colors"
         >
-          DOWNLOAD
+          Download
         </button>
       )}
     </div>

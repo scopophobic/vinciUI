@@ -32,16 +32,10 @@ export function ImageInputNode({ data }: ImageInputNodeProps) {
   };
 
   return (
-    <div className="p-4 border border-gray-600 bg-black w-72 font-mono">
-      <Handle 
-        type="source" 
-        position={Position.Right} 
-        className="w-3 h-3 bg-white border border-gray-500" 
-      />
-      <div className="mb-3">
-        <label className="text-white text-xs font-bold tracking-wider uppercase">
-          IMAGE INPUT
-        </label>
+    <div className="p-4 border border-gray-300 bg-white shadow-sm w-64 hover:shadow-md transition-shadow font-mono">
+      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-black" />
+      <div className="flex items-center mb-3">
+        <label className="text-sm font-mono uppercase tracking-wide text-black">Image Input</label>
       </div>
       
       <input
@@ -54,7 +48,7 @@ export function ImageInputNode({ data }: ImageInputNodeProps) {
       
       <div 
         onClick={handleClick}
-        className="w-full h-32 border border-dashed border-gray-700 bg-gray-900 flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors"
+        className="w-full h-32 border border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-black hover:bg-gray-50 transition-colors"
       >
         {data.imageBase64 ? (
           <img 
@@ -64,11 +58,9 @@ export function ImageInputNode({ data }: ImageInputNodeProps) {
           />
         ) : (
           <>
-            <div className="w-8 h-8 border border-gray-600 mb-2 flex items-center justify-center">
-              <span className="text-gray-500 text-xs">IMG</span>
-            </div>
+            <div className="w-8 h-8 border border-gray-400 mb-2"></div>
             <span className="text-xs text-gray-500 text-center font-mono">
-              CLICK TO UPLOAD
+              Click to upload
             </span>
           </>
         )}

@@ -297,26 +297,26 @@ function App() {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }} className="bg-black">
+    <div style={{ width: '100vw', height: '100vh' }} className="bg-white font-mono">
       <ReactFlowProvider>
-        <div className="absolute top-4 left-4 z-10 flex gap-3">
+        <div className="absolute top-6 left-6 z-10 flex gap-3">
           <button
             onClick={handleGenerate}
-            className="px-6 py-2 bg-white text-black border border-gray-300 hover:bg-gray-100 transition-colors font-mono text-sm tracking-wide"
+            className="px-4 py-2 bg-black text-white border border-gray-300 hover:bg-gray-800 transition-colors text-sm font-mono uppercase tracking-wide"
           >
-            GENERATE
+            Generate
           </button>
           <button
             onClick={addPromptNode}
-            className="px-4 py-2 bg-transparent text-white border border-gray-600 hover:bg-gray-900 transition-colors font-mono text-sm tracking-wide"
+            className="px-4 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-mono uppercase tracking-wide"
           >
-            + PROMPT
+            + Prompt
           </button>
           <button
             onClick={addImageNode}
-            className="px-4 py-2 bg-transparent text-white border border-gray-600 hover:bg-gray-900 transition-colors font-mono text-sm tracking-wide"
+            className="px-4 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-mono uppercase tracking-wide"
           >
-            + IMAGE
+            + Image
           </button>
         </div>
         <ReactFlow
@@ -327,24 +327,15 @@ function App() {
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           fitView
-          className="bg-black"
+          className="bg-white"
           defaultEdgeOptions={{
-            style: { strokeWidth: 2, stroke: '#666' },
-            type: 'smoothstep'
+            type: 'smoothstep',
+            style: { strokeWidth: 2, stroke: '#333' },
+            animated: false
           }}
         >
-          <Controls 
-            className="bg-black border border-gray-700"
-            style={{
-              button: { backgroundColor: '#000', border: '1px solid #666', color: '#fff' }
-            }}
-          />
-          <Background 
-            gap={12} 
-            size={0.5} 
-            color="#333" 
-            style={{ backgroundColor: '#000' }}
-          />
+          <Controls className="bg-white border border-gray-200" />
+          <Background gap={16} size={0.5} color="#f0f0f0" />
         </ReactFlow>
       </ReactFlowProvider>
     </div>

@@ -2,39 +2,3 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
-
-* {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-/* Custom React Flow styles */
-.react-flow__edge-path {
-  stroke-width: 2px;
-}
-
-.react-flow__handle {
-  border: 1px solid #666;
-  background: white;
-}
-
-.react-flow__handle:hover {
-  background: #f0f0f0;
-}
-
-.react-flow__controls {
-  background: black;
-  border: 1px solid #666;
-}
-
-.react-flow__controls button {
-  background: black;
-  border: 1px solid #666;
-  color: white;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.react-flow__controls button:hover {
-  background: #222;
-}
-
