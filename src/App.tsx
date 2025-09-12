@@ -16,6 +16,9 @@ import { PromptNode } from './nodes/PromptNode';
 import { ImageInputNode } from './nodes/ImageInputNode';
 import { GeneratorNode } from './nodes/GeneratorNode';
 import { OutputNode } from './nodes/OutputNode';
+// import * as dotenv from 'dotenv';
+
+// dotenv.config({ path: '.env.local' });
 
 // This maps the 'type' string in your node data to the actual component
 const nodeTypes = {
@@ -126,6 +129,8 @@ function App() {
         // To fix this, declare the variable as `apiKey`:
 
         // API KEY IS LOADED FROM THE ENV FILE
+        // const apiKey = process.env.VITE_GEMINI_API_KEY;
+        console.log('All env vars:', import.meta.env);
         const apiKey: string = import.meta.env.VITE_GEMINI_API_KEY;
         console.log('API Key loaded:', apiKey ? `${apiKey.slice(0, 10)}...` : 'NOT FOUND');
         
