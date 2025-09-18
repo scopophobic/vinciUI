@@ -16,6 +16,8 @@ import { PromptNode } from './nodes/PromptNode';
 import { ImageInputNode } from './nodes/ImageInputNode';
 import { GeneratorNode } from './nodes/GeneratorNode';
 import { OutputNode } from './nodes/OutputNode';
+import { ImageStitchNode } from './nodes/ImageStitchNode';
+import { PromptEnhancerNode } from './nodes/PromptEnhancerNode';
 // import * as dotenv from 'dotenv';
 
 // dotenv.config({ path: '.env.local' });
@@ -26,6 +28,8 @@ const nodeTypes = {
   imageInput: ImageInputNode,
   generator: GeneratorNode,
   output: OutputNode,
+  imageStitch: ImageStitchNode,
+  promptEnhancer: PromptEnhancerNode,
 };
 
 function App() {
@@ -38,6 +42,24 @@ function App() {
           : node
       )
     );
+    
+    // Update connected nodes when source data changes
+    setTimeout(() => updateConnectedNodes(), 100);
+  };
+
+  // Function to collect images for stitch nodes
+  const collectImagesForStitchNode = (stitchNodeId: string) => {
+    const connectedEdges = edges.filter(e => e.target === stitchNodeId);
+    const imageData: string[] = [];
+    
+    connectedEdges.forEach(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      if (sourceNode && sourceNode.type === 'imageInput' && sourceNode.data.imageBase64) {
+        imageData.push(sourceNode.data.imageBase64);
+      }
+    });
+    
+    return imageData;
   };
 
   // Define the initial state of the graph
@@ -86,9 +108,71 @@ function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)), 
-    [setEdges]
+    (params: Connection) => {
+      const newEdges = addEdge(params, [...edges]);
+      setEdges(newEdges);
+      // Update connected nodes after connection
+      setTimeout(() => updateConnectedNodes(), 100);
+    }, 
+    [edges, setEdges]
   );
+
+  // Function to update nodes with connected data
+  const updateConnectedNodes = () => {
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        // Update Image Stitch nodes
+        if (node.type === 'imageStitch') {
+          const connectedEdges = edges.filter(e => e.target === node.id);
+          const imageData: string[] = [];
+          
+          connectedEdges.forEach(edge => {
+            const sourceNode = currentNodes.find(n => n.id === edge.source);
+            if (sourceNode && sourceNode.type === 'imageInput' && sourceNode.data.imageBase64) {
+              imageData.push(sourceNode.data.imageBase64);
+            }
+          });
+          
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              images: imageData
+            }
+          };
+        }
+        
+        // Update Prompt Enhancer nodes
+        if (node.type === 'promptEnhancer') {
+          const connectedEdges = edges.filter(e => e.target === node.id);
+          let inputPrompt = node.data.inputPrompt;
+          let referenceImage = '';
+          
+          connectedEdges.forEach(edge => {
+            const sourceNode = currentNodes.find(n => n.id === edge.source);
+            if (sourceNode) {
+              if (edge.targetHandle === 'prompt' && sourceNode.data.prompt) {
+                inputPrompt = sourceNode.data.prompt;
+              } else if (edge.targetHandle === 'image' && sourceNode.data.imageBase64) {
+                referenceImage = sourceNode.data.imageBase64;
+              }
+            }
+          });
+          
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              inputPrompt,
+              referenceImage
+            }
+          };
+        }
+        
+        return node;
+      })
+    );
+  };
 
   const handleGenerate = async () => {
     const generatorNode = nodes.find(n => n.type === 'generator');
@@ -108,8 +192,17 @@ function App() {
       const promptNode = promptEdge ? nodes.find(n => n.id === promptEdge.source) : null;
       const imageNode = imageEdge ? nodes.find(n => n.id === imageEdge.source) : null;
 
-      const prompt = promptNode?.data.prompt;
-      const imageBase64 = imageNode?.data.imageBase64;
+      // Handle different prompt sources (direct prompt or enhanced prompt)
+      let prompt = promptNode?.data.prompt;
+      if (promptNode?.type === 'promptEnhancer') {
+        prompt = promptNode.data.enhancedPrompt || promptNode.data.inputPrompt;
+      }
+
+      // Handle different image sources (direct image or stitched images)
+      let imageBase64 = imageNode?.data.imageBase64;
+      if (imageNode?.type === 'imageStitch') {
+        imageBase64 = imageNode.data.stitchedImage;
+      }
 
       if (!prompt || prompt.trim() === '') {
         alert('Please connect a prompt node with text or add a prompt!');
@@ -302,10 +395,45 @@ function App() {
     setNodes(nds => [...nds, newNode]);
   };
 
+  const addImageStitchNode = () => {
+    const newId = `stitch-${Date.now()}`;
+    const newNode: Node = {
+      id: newId,
+      type: 'imageStitch',
+      position: { x: Math.random() * 300 + 200, y: Math.random() * 300 + 100 },
+      data: {
+        images: [],
+        stitchedImage: '',
+        layout: 'horizontal' as const,
+        nodeId: newId,
+        onChange: (data: any) => updateNodeData(newId, data),
+        getConnectedImages: () => collectImagesForStitchNode(newId)
+      }
+    };
+    setNodes(nds => [...nds, newNode]);
+  };
+
+  const addPromptEnhancerNode = () => {
+    const newId = `enhancer-${Date.now()}`;
+    const newNode: Node = {
+      id: newId,
+      type: 'promptEnhancer',
+      position: { x: Math.random() * 300 + 100, y: Math.random() * 300 + 50 },
+      data: {
+        inputPrompt: '',
+        enhancedPrompt: '',
+        isEnhancing: false,
+        enhancementStyle: 'detailed' as const,
+        onChange: (data: any) => updateNodeData(newId, data)
+      }
+    };
+    setNodes(nds => [...nds, newNode]);
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh' }} className="bg-white font-mono">
       <ReactFlowProvider>
-        <div className="absolute top-6 left-6 z-10 flex gap-3">
+        <div className="absolute top-6 left-6 z-10 flex gap-2 flex-wrap">
           <button
             onClick={handleGenerate}
             className="px-4 py-2 bg-black text-white border border-gray-300 hover:bg-gray-800 transition-colors text-sm font-mono uppercase tracking-wide"
@@ -314,15 +442,27 @@ function App() {
           </button>
           <button
             onClick={addPromptNode}
-            className="px-4 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-mono uppercase tracking-wide"
+            className="px-3 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-xs font-mono uppercase tracking-wide"
           >
             + Prompt
           </button>
           <button
+            onClick={addPromptEnhancerNode}
+            className="px-3 py-2 bg-white text-indigo-600 border border-indigo-300 hover:bg-indigo-50 transition-colors text-xs font-mono uppercase tracking-wide"
+          >
+            + Enhancer
+          </button>
+          <button
             onClick={addImageNode}
-            className="px-4 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-sm font-mono uppercase tracking-wide"
+            className="px-3 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-xs font-mono uppercase tracking-wide"
           >
             + Image
+          </button>
+          <button
+            onClick={addImageStitchNode}
+            className="px-3 py-2 bg-white text-cyan-600 border border-cyan-300 hover:bg-cyan-50 transition-colors text-xs font-mono uppercase tracking-wide"
+          >
+            + Stitch
           </button>
         </div>
         <ReactFlow
