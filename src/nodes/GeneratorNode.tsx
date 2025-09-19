@@ -2,7 +2,8 @@ import { Handle, Position } from 'reactflow';
 
 interface GeneratorNodeData {
   isGenerating: boolean;
-  onChange: (data: { isGenerating: boolean }) => void;
+  selectedModel: 'gemini-2.5-flash-image-preview' | 'gemini-2.0-flash-preview-image-generation';
+  onChange: (data: any) => void;
 }
 
 interface GeneratorNodeProps {
@@ -29,6 +30,33 @@ export function GeneratorNode({ data }: GeneratorNodeProps) {
         <div className="flex items-center gap-2 text-xs text-gray-600 font-mono">
           <div className="w-2 h-2 bg-black"></div>
           <span>Image (Optional)</span>
+        </div>
+
+        {/* Model Selection */}
+        <div className="space-y-2">
+          <div className="text-xs text-gray-700 font-mono">Model:</div>
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-xs font-mono">
+              <input
+                type="radio"
+                name="model"
+                checked={data.selectedModel === 'gemini-2.5-flash-image-preview'}
+                onChange={() => data.onChange({ selectedModel: 'gemini-2.5-flash-image-preview' })}
+                className="w-3 h-3"
+              />
+              <span>2.5 Flash (Nano Banana)</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs font-mono">
+              <input
+                type="radio"
+                name="model"
+                checked={data.selectedModel === 'gemini-2.0-flash-preview-image-generation'}
+                onChange={() => data.onChange({ selectedModel: 'gemini-2.0-flash-preview-image-generation' })}
+                className="w-3 h-3"
+              />
+              <span>2.0 Flash (Legacy)</span>
+            </label>
+          </div>
         </div>
         
         {data.isGenerating && (

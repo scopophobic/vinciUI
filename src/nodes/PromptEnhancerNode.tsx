@@ -35,7 +35,7 @@ export function PromptEnhancerNode({ data }: PromptEnhancerNodeProps) {
 
       // Use Gemini to enhance the prompt
       const enhancementInstruction = getEnhancementInstruction(data.enhancementStyle);
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
       const parts: any[] = [{
         text: `${enhancementInstruction}\n\nOriginal prompt: "${inputPrompt}"\n\nEnhanced prompt:`

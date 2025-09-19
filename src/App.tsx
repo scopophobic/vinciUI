@@ -88,6 +88,7 @@ function App() {
       position: { x: 400, y: 125 }, 
       data: { 
         isGenerating: false,
+        selectedModel: 'gemini-2.5-flash-image-preview' as const,
         onChange: (data: any) => updateNodeData('3', data) 
       } 
     },
@@ -228,14 +229,15 @@ function App() {
         console.log('API Key loaded:', apiKey ? `${apiKey.slice(0, 10)}...` : 'NOT FOUND');
         
         if (apiKey && apiKey !== 'your_gemini_api_key_here' && apiKey !== 'your_actual_api_key_here') {
-          console.log('Trying Gemini 2.0 Flash Preview Image Generation API call...');
-          console.log('⚠️ Note: Free tier has limited quota. If you hit limits, wait or upgrade.');
+          // Use the selected image generation model
+          const selectedModel = generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview';
+          let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+          let modelName = selectedModel === 'gemini-2.5-flash-image-preview' 
+            ? "Gemini 2.5 Flash Image Preview (Nano Banana)" 
+            : "Gemini 2.0 Flash Preview Image Generation (Legacy)";
           
-          // For image generation, we need to use the image preview model
-          // But let's try different approaches based on quota availability
-          // Use the actual image generation model
-           let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`;
-            let modelName = "Gemini 2.0 Flash Preview Image Generation";
+          console.log(`Trying ${modelName} API call...`);
+          console.log('⚠️ Note: Free tier has limited quota. If you hit limits, wait or upgrade.');
           
           // Alternative models to try if quota is exceeded
           const fallbackModels = [
