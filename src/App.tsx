@@ -433,7 +433,14 @@ function App() {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }} className="bg-white font-mono">
+    <div style={{ width: '100vw', height: '100vh' }} className="bg-white font-mono relative">
+      {/* Dot pattern background */}
+      <div 
+        className="fixed inset-0 z-0" 
+        style={{
+          background: 'rgb(255, 255, 255) radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.35) 1px, transparent 0px) 0% 0% / 20px 20px'
+        }}
+      />
       <ReactFlowProvider>
         <div className="absolute top-6 left-6 z-10 flex gap-2 flex-wrap">
           <button
@@ -475,7 +482,7 @@ function App() {
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           fitView
-          className="bg-white"
+          className="bg-transparent relative z-10"
           defaultEdgeOptions={{
             type: 'bezier',
             style: { strokeWidth: 1.5, stroke: '#666' },
@@ -483,7 +490,6 @@ function App() {
           }}
         >
           <Controls className="bg-white border border-gray-200" />
-          <Background gap={16} size={0.5} color="#f0f0f0" />
         </ReactFlow>
       </ReactFlowProvider>
     </div>
