@@ -4,14 +4,6 @@ A beautiful, minimal node-based visual interface for AI image generation powered
 
 ![VinciUI Interface](image.png)
 
-## ✨ Features
-
-- **🎨 Visual Workflow**: Build image generation pipelines by connecting intuitive nodes
-- **⚡ AI Enhanced**: Powered by Gemini 2.5 Flash for superior image generation
-- **🔧 Advanced Tools**: Image stitching, prompt enhancement, and multi-model support
-- **🎯 Model Selection**: Choose between Gemini 2.5 Flash (Nano Banana) and legacy models
-- **📱 Modern UI**: Clean, minimal design with elegant dot pattern background
-- **🔗 Node Types**: Prompt, Image Input, Generator, Output, Image Stitch, Prompt Enhancer
 
 ## 🚀 Quick Start
 
@@ -19,8 +11,8 @@ A beautiful, minimal node-based visual interface for AI image generation powered
 
 - **Node.js** (v16 or higher)
 - **npm** or **yarn**
-- **Google AI API Key** (free tier available)
-
+- **Google AI API Key** (tier 1 available)
+- if you only have free tier then you can't use flash 2.5 (nano banana) still could use flash 2.0 image preview (lagacy model) .
 ### Installation
 
 1. **Clone the repository**
