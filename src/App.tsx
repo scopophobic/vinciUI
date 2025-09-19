@@ -5,7 +5,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   Controls,
-  Background,
   Connection,
   Edge,
   Node,
@@ -18,6 +17,7 @@ import { GeneratorNode } from './nodes/GeneratorNode';
 import { OutputNode } from './nodes/OutputNode';
 import { ImageStitchNode } from './nodes/ImageStitchNode';
 import { PromptEnhancerNode } from './nodes/PromptEnhancerNode';
+import { LandingPage } from './components/LandingPage';
 // import * as dotenv from 'dotenv';
 
 // dotenv.config({ path: '.env.local' });
@@ -33,6 +33,8 @@ const nodeTypes = {
 };
 
 function App() {
+  const [showLanding, setShowLanding] = useState(true);
+
   // Define a function to update data within a node
   const updateNodeData = (nodeId: string, newData: any) => {
     setNodes((nds) =>
@@ -239,12 +241,6 @@ function App() {
           console.log(`Trying ${modelName} API call...`);
           console.log('⚠️ Note: Free tier has limited quota. If you hit limits, wait or upgrade.');
           
-          // Alternative models to try if quota is exceeded
-          const fallbackModels = [
-            { url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, name: "Gemini 1.5 Pro" },
-            { url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, name: "Gemini 2.0 Flash" }
-          ];
-          
           // Simple, direct prompt for image generation (like in the official docs)
           const promptParts: any[] = [
             { text: prompt }
@@ -431,6 +427,11 @@ function App() {
     };
     setNodes(nds => [...nds, newNode]);
   };
+
+  // Show landing page or workshop
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh' }} className="bg-white font-mono relative">
