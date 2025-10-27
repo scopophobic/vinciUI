@@ -44,3 +44,5 @@ config/secrets.json
 
 plan.md
 SETUP_PHASE2.md
+
+trash/*
