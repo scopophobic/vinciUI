@@ -18,6 +18,9 @@ import { OutputNode } from './nodes/OutputNode';
 import { ImageStitchNode } from './nodes/ImageStitchNode';
 import { PromptEnhancerNode } from './nodes/PromptEnhancerNode';
 import { LandingPage } from './components/LandingPage';
+import { LoginPage } from './components/Auth/LoginPage';
+import { UserProfile } from './components/Auth/UserProfile';
+import { AuthProvider, useAuth } from './context/AuthContext';
 // import * as dotenv from 'dotenv';
 
 // dotenv.config({ path: '.env.local' });
@@ -32,7 +35,8 @@ const nodeTypes = {
   promptEnhancer: PromptEnhancerNode,
 };
 
-function App() {
+function WorkshopApp() {
+  const { user, isAuthenticated, refreshUser } = useAuth();
   const [showLanding, setShowLanding] = useState(true);
 
   // Define a function to update data within a node
@@ -429,8 +433,11 @@ function App() {
   };
 
   // Show landing page or workshop
-  if (showLanding) {
-    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  if (!isAuthenticated) {
+    if (showLanding) {
+      return <LandingPage onEnter={() => setShowLanding(false)} />;
+    }
+    return <LoginPage />;
   }
 
   return (
@@ -444,6 +451,11 @@ function App() {
       />
       <ReactFlowProvider>
         <div className="absolute top-6 left-6 z-10 flex gap-2 flex-wrap">
+          {/* User Profile */}
+          <UserProfile />
+        </div>
+        
+        <div className="absolute top-6 left-80 z-10 flex gap-2 flex-wrap">
           <button
             onClick={handleGenerate}
             className="px-4 py-2 bg-black text-white border border-gray-300 hover:bg-gray-800 transition-colors text-sm font-mono uppercase tracking-wide"
@@ -494,6 +506,15 @@ function App() {
         </ReactFlow>
       </ReactFlowProvider>
     </div>
+  );
+}
+
+// Main App component with authentication
+function App() {
+  return (
+    <AuthProvider>
+      <WorkshopApp />
+    </AuthProvider>
   );
 }
 

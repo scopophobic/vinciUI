@@ -23,57 +23,38 @@ export function PromptEnhancerNode({ data }: PromptEnhancerNodeProps) {
     data.onChange({ ...data, isEnhancing: true });
 
     try {
-      // Get API key
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      
-      if (!apiKey) {
-        // Fallback: Local enhancement rules
-        const enhanced = localEnhancePrompt(inputPrompt, data.enhancementStyle);
-        data.onChange({ enhancedPrompt: enhanced, isEnhancing: false });
-        return;
-      }
-
-      // Use Gemini to enhance the prompt
-      const enhancementInstruction = getEnhancementInstruction(data.enhancementStyle);
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-      const parts: any[] = [{
-        text: `${enhancementInstruction}\n\nOriginal prompt: "${inputPrompt}"\n\nEnhanced prompt:`
-      }];
-
-      // Add reference image if available
-      if (data.referenceImage) {
-        parts.push({
-          inlineData: {
-            mimeType: "image/png",
-            data: data.referenceImage
-          }
-        });
-        parts[0].text += '\n\nAnalyze the provided reference image and incorporate relevant visual details into the enhancement.';
-      }
-
-      const payload = {
-        contents: [{
-          parts: parts
-        }],
-        generationConfig: {
-          temperature: 0.7,
-          candidateCount: 1,
-        }
-      };
-
-      const response = await fetch(apiUrl, {
+      // Use protected API endpoint
+      const response = await fetch('/api/generate/enhance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        credentials: 'include',
+        body: JSON.stringify({
+          prompt: inputPrompt,
+          enhancementStyle: data.enhancementStyle,
+          referenceImage: data.referenceImage
+        })
       });
 
       if (response.ok) {
         const result = await response.json();
-        const enhanced = result?.candidates?.[0]?.content?.parts?.[0]?.text || inputPrompt;
-        data.onChange({ enhancedPrompt: enhanced.trim(), isEnhancing: false });
+        data.onChange({ 
+          enhancedPrompt: result.enhancedPrompt, 
+          isEnhancing: false 
+        });
       } else {
-        throw new Error('API enhancement failed');
+        const errorData = await response.json();
+        console.error('Enhancement API error:', response.status, errorData);
+        
+        if (response.status === 429) {
+          alert(`⚠️ ${errorData.message || 'Enhancement limit reached. Please wait before trying again.'}`);
+        } else if (response.status === 400) {
+          alert(`❌ ${errorData.message || 'Content blocked due to policy violations.'}`);
+        } else if (response.status === 401) {
+          alert('🔒 Please log in again to continue.');
+          window.location.reload();
+        }
+        
+        throw new Error(errorData.message || 'Enhancement failed');
       }
 
     } catch (error) {
