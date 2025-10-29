@@ -8,7 +8,7 @@ export function UserProfile() {
   if (!user) return null;
 
   const usagePercentage = (user.usage.imagesGenerated / user.usage.dailyLimit) * 100;
-  const enhancementLimit = user.tier === 'free' ? 5 : 200;
+  const enhancementLimit = user.tier === 'free' ? 5 : user.tier === 'developer' ? 1000 : 200;
   const enhancementPercentage = (user.usage.promptsEnhanced / enhancementLimit) * 100;
 
   return (
@@ -24,8 +24,11 @@ export function UserProfile() {
         />
         <div className="text-left">
           <div className="text-sm font-mono text-black">{user.name}</div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide">
-            {user.tier} tier
+          <div className={`text-xs uppercase tracking-wide ${
+            user.tier === 'developer' ? 'text-purple-600 font-bold' : 
+            user.tier === 'premium' ? 'text-blue-600' : 'text-gray-500'
+          }`}>
+            {user.tier} {user.tier === 'developer' ? '🔧' : user.tier === 'premium' ? '⭐' : ''} tier
           </div>
         </div>
         <svg 
@@ -51,8 +54,11 @@ export function UserProfile() {
               <div>
                 <div className="font-mono text-black font-bold">{user.name}</div>
                 <div className="text-sm text-gray-600">{user.email}</div>
-                <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">
-                  {user.tier} tier
+                <div className={`text-xs uppercase tracking-wide mt-1 ${
+                  user.tier === 'developer' ? 'text-purple-600 font-bold' : 
+                  user.tier === 'premium' ? 'text-blue-600' : 'text-gray-500'
+                }`}>
+                  {user.tier} {user.tier === 'developer' ? '🔧' : user.tier === 'premium' ? '⭐' : ''} tier
                 </div>
               </div>
             </div>
@@ -97,6 +103,37 @@ export function UserProfile() {
               Resets at: {new Date(user.usage.resetTime).toLocaleTimeString()}
             </div>
           </div>
+
+          {/* Developer Privileges */}
+          {user.tier === 'developer' && (
+            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+              <div className="text-sm font-mono text-black mb-2 uppercase tracking-wide">
+                🔧 Developer Privileges
+              </div>
+              <div className="space-y-1 text-xs text-gray-600">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>1000 daily generations</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>No cooldown periods</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Content moderation bypass</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Extended prompt length (2000 chars)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Full API access for testing</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Upgrade Notice (for free users) */}
           {user.tier === 'free' && (

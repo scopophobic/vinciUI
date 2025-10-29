@@ -5,7 +5,7 @@ export interface User {
   email: string;
   name: string;
   picture: string;
-  tier: 'free' | 'premium';
+  tier: 'free' | 'premium' | 'developer';
   usage: {
     imagesGenerated: number;
     promptsEnhanced: number;
@@ -50,6 +50,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const checkAuthStatus = async () => {
     try {
+      // Check if we're in development mode and API is not available
       const response = await fetch('/api/auth/me', {
         credentials: 'include'
       });
@@ -68,6 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     } catch (error) {
       console.error('Auth check failed:', error);
+      // In development, API might not be available - that's okay
       setUser(null);
     } finally {
       setIsLoading(false);

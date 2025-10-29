@@ -19,6 +19,13 @@ const TIER_LIMITS = {
     enhancementsPerDay: 200,
     cooldownMinutes: 0, // No cooldown
     maxPromptLength: 1000
+  },
+  developer: {
+    imagesPerDay: 1000, // Unlimited for testing
+    enhancementsPerDay: 1000,
+    cooldownMinutes: 0, // No cooldown
+    maxPromptLength: 2000, // Longer prompts for testing
+    bypassModeration: true // Skip content moderation for testing
   }
 };
 
@@ -91,10 +98,14 @@ export async function checkRateLimit(
   }
 }
 
-export function getPromptLengthLimit(tier: 'free' | 'premium'): number {
+export function getPromptLengthLimit(tier: 'free' | 'premium' | 'developer'): number {
   return TIER_LIMITS[tier].maxPromptLength;
 }
 
-export function getTierLimits(tier: 'free' | 'premium') {
+export function getTierLimits(tier: 'free' | 'premium' | 'developer') {
   return TIER_LIMITS[tier];
+}
+
+export function shouldBypassModeration(tier: 'free' | 'premium' | 'developer'): boolean {
+  return TIER_LIMITS[tier].bypassModeration || false;
 }

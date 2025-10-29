@@ -1,8 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, shouldBypassModeration } from '../middleware/rateLimit';
 import { moderateContent, aiModeration } from '../middleware/contentModeration';
-import { incrementUsage, logGeneration } from '../utils/database';
+import { incrementUsage, logGeneration, getUserById } from '../utils/database';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -33,35 +33,42 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
     }
 
-    // 3. Content moderation - basic filtering
-    const basicModeration = await moderateContent(prompt, userId, 'prompt');
-    if (!basicModeration.allowed) {
-      await logGeneration(userId, prompt, model || 'unknown', 'blocked', { 
-        moderation: basicModeration 
-      });
-      
-      return res.status(400).json({ 
-        error: 'Content blocked', 
-        message: basicModeration.message,
-        flags: basicModeration.flags
-      });
-    }
-
-    // 4. Enhanced AI moderation for additional safety
-    try {
-      const aiModerationResult = await aiModeration(prompt);
-      if (!aiModerationResult.allowed) {
+    // 3. Content moderation (skip for developer accounts)
+    const user = await getUserById(userId);
+    const bypassModeration = user && shouldBypassModeration(user.tier);
+    
+    if (!bypassModeration) {
+      const basicModeration = await moderateContent(prompt, userId, 'prompt');
+      if (!basicModeration.allowed) {
         await logGeneration(userId, prompt, model || 'unknown', 'blocked', { 
-          aiModeration: aiModerationResult 
+          moderation: basicModeration 
         });
         
         return res.status(400).json({ 
-          error: 'Content blocked by AI moderation', 
-          message: aiModerationResult.message
+          error: 'Content blocked', 
+          message: basicModeration.message,
+          flags: basicModeration.flags
         });
       }
-    } catch (aiError) {
-      console.warn('AI moderation failed, proceeding with basic moderation:', aiError);
+
+      // 4. Enhanced AI moderation for additional safety
+      try {
+        const aiModerationResult = await aiModeration(prompt);
+        if (!aiModerationResult.allowed) {
+          await logGeneration(userId, prompt, model || 'unknown', 'blocked', { 
+            aiModeration: aiModerationResult 
+          });
+          
+          return res.status(400).json({ 
+            error: 'Content blocked by AI moderation', 
+            message: aiModerationResult.message
+          });
+        }
+      } catch (aiError) {
+        console.warn('AI moderation failed, proceeding with basic moderation:', aiError);
+      }
+    } else {
+      console.log('Bypassing content moderation for developer account');
     }
 
     // 5. Validate model selection
