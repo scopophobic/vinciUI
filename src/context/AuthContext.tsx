@@ -43,17 +43,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const isAuthenticated = !!user;
 
-  // Check authentication status on mount
+  // Check authentication status on mount and handle URL token
   useEffect(() => {
-    checkAuthStatus();
+    // Check for auth token in URL (from OAuth callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    const authSuccess = urlParams.get('auth_success');
+    const token = urlParams.get('token');
+    
+    console.log('🔍 Auth check on mount:', { authSuccess, hasToken: !!token, url: window.location.href });
+    
+    if (authSuccess === 'true' && token) {
+      console.log('✅ Found auth token in URL, storing...');
+      // Store token in localStorage for development
+      localStorage.setItem('auth_token', token);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Check auth status to load user data
+      checkAuthStatus();
+    } else {
+      console.log('🔍 No URL token, checking existing auth...');
+      checkAuthStatus();
+    }
   }, []);
 
   const checkAuthStatus = async () => {
     try {
-      // Check if we're in development mode and API is not available
-      const response = await fetch('/api/auth/me', {
-        credentials: 'include'
+      // Get token from localStorage for development
+      const token = localStorage.getItem('auth_token');
+      const headers: HeadersInit = {};
+      
+      console.log('🔍 Checking auth status with token:', !!token);
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('http://localhost:3001/api/auth/me', {
+        credentials: 'include',
+        headers
       });
+      
+      console.log('🔍 Auth API response:', response.status, response.ok);
 
       if (response.ok) {
         const data = await response.json();
@@ -77,20 +107,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const login = () => {
-    window.location.href = '/api/auth/google';
+    // Always use real OAuth for production-ready app
+    window.location.href = 'http://localhost:3001/api/auth/google';
   };
 
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch('http://localhost:3001/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
+      // Clear localStorage token
+      localStorage.removeItem('auth_token');
       setUser(null);
       window.location.href = '/';
     } catch (error) {
       console.error('Logout failed:', error);
       // Force logout on client side even if API fails
+      localStorage.removeItem('auth_token');
       setUser(null);
       window.location.href = '/';
     }

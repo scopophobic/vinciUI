@@ -329,12 +329,17 @@ function WorkshopApp() {
           }
         }
 
-        // Fallback to serverless function
-        console.log('Trying serverless function...');
-        const response = await fetch('/api/generate', {
+        // Use protected API endpoint
+        console.log('Trying protected API endpoint...');
+        const response = await fetch('http://localhost:3001/api/generate/image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, imageBase64 }),
+          credentials: 'include',
+          body: JSON.stringify({
+            prompt,
+            imageBase64,
+            model: generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview'
+          })
         });
 
         if (response.ok) {
@@ -344,7 +349,8 @@ function WorkshopApp() {
             updateNodeData(outputNode.id, { imageUrl: result.image });
           }
         } else {
-          throw new Error('Serverless function not available');
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(`API Error: ${response.status} - ${errorData.error || 'Authentication required'}`);
         }
       } catch (apiError) {
         console.log('API not available, using development simulation:', apiError instanceof Error ? apiError.message : String(apiError));

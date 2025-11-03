@@ -18,7 +18,7 @@ export function UserProfile() {
         className="flex items-center gap-3 p-2 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200"
       >
         <img 
-          src={user.picture} 
+          src={user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=6366f1&color=fff`} 
           alt={user.name}
           className="w-8 h-8 rounded-full"
         />
@@ -42,12 +42,12 @@ export function UserProfile() {
       </button>
 
       {showDropdown && (
-        <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+        <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-w-[calc(100vw-2rem)] mr-4">
           {/* User Info */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center gap-3 mb-3">
               <img 
-                src={user.picture} 
+                src={user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=6366f1&color=fff`} 
                 alt={user.name}
                 className="w-12 h-12 rounded-full"
               />

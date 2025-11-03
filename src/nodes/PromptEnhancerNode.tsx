@@ -24,7 +24,7 @@ export function PromptEnhancerNode({ data }: PromptEnhancerNodeProps) {
 
     try {
       // Use protected API endpoint
-      const response = await fetch('/api/generate/enhance', {
+      const response = await fetch('http://localhost:3001/api/generate/enhance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
