@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Debug</title>
+</head>
+<body>
+    <h1>Authentication Debug</h1>
+    <button onclick="testAuth()">Test Auth Flow</button>
+    <button onclick="checkToken()">Check Token</button>
+    <button onclick="clearToken()">Clear Token</button>
+    <div id="output"></div>
+
+    <script>
+        function log(message) {
+            document.getElementById('output').innerHTML += '<p>' + message + '</p>';
+        }
+
+        function testAuth() {
+            log('🔍 Starting auth test...');
+            
+            // Check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const authSuccess = urlParams.get('auth_success');
+            const token = urlParams.get('token');
+            
+            log('URL params: auth_success=' + authSuccess + ', hasToken=' + !!token);
+            
+            if (authSuccess === 'true' && token) {
+                log('✅ Found token in URL, storing...');
+                localStorage.setItem('auth_token', token);
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
+            // Check stored token
+            const storedToken = localStorage.getItem('auth_token');
+            log('Stored token: ' + (storedToken ? 'YES' : 'NO'));
+            
+            if (storedToken) {
+                // Test API call
+                fetch('http://localhost:3001/api/auth/me', {
+                    headers: { 'Authorization': 'Bearer ' + storedToken },
+                    credentials: 'include'
+                })
+                .then(response => {
+                    log('API Response: ' + response.status + ' ' + response.statusText);
+                    return response.json();
+                })
+                .then(data => {
+                    log('API Data: ' + JSON.stringify(data));
+                })
+                .catch(error => {
+                    log('API Error: ' + error.message);
+                });
+            }
+        }
+
+        function checkToken() {
+            const token = localStorage.getItem('auth_token');
+            log('Current token: ' + (token ? token.substring(0, 50) + '...' : 'NONE'));
+        }
+
+        function clearToken() {
+            localStorage.removeItem('auth_token');
+            log('Token cleared');
+        }
+
+        // Auto-run on load
+        window.onload = testAuth;
+    </script>
+</body>
+</html>
