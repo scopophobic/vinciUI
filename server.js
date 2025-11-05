@@ -65,9 +65,49 @@ function getFrontendOrigin() {
   return process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 }
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'VinciUI Backend is running!' });
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'VinciUI Backend API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth/google',
+      debug: '/api/auth/debug'
+    }
+  });
+});
+
+// Health check with DB connectivity test
+app.get('/api/health', async (req, res) => {
+  try {
+    // Quick DB connectivity check
+    let dbStatus = 'unknown';
+    try {
+      const { getPool } = await import('./api/utils/database.js');
+      const pool = getPool();
+      await pool.query('SELECT 1');
+      dbStatus = 'connected';
+    } catch (dbError) {
+      dbStatus = 'disconnected';
+    }
+
+    res.json({ 
+      status: 'ok', 
+      message: 'VinciUI Backend is running!',
+      timestamp: new Date().toISOString(),
+      database: dbStatus,
+      environment: process.env.NODE_ENV || 'development',
+      port: PORT
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Health check failed',
+      error: error.message 
+    });
+  }
 });
 
 // Auth diagnostics (non-sensitive) - helps verify session quickly
