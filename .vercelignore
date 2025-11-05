@@ -1,0 +1,7 @@
+# Exclude backend from the frontend (Vercel) deployment
+api/**
+server.js
+scripts/**
+PRODUCTION_SETUP.md
+trash/**
+
