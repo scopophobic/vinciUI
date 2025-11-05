@@ -5,7 +5,7 @@ export interface User {
   email: string;
   name: string;
   picture: string;
-  tier: 'free' | 'premium' | 'developer';
+  tier: 'free' | 'premium' | 'tester' | 'developer';
   usage: {
     imagesGenerated: number;
     promptsEnhanced: number;

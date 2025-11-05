@@ -36,7 +36,7 @@ export interface User {
   email: string;
   name: string;
   picture: string;
-  tier: 'free' | 'premium' | 'developer';
+  tier: 'free' | 'premium' | 'tester' | 'developer';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -142,8 +142,9 @@ export async function getUserWithUsage(userId: string): Promise<UserWithUsage> {
     const dailyLimits = {
       free: { images: 2, enhancements: 5 },
       premium: { images: 100, enhancements: 200 },
+      tester: { images: 50, enhancements: 100 },
       developer: { images: 1000, enhancements: 1000 }
-    };
+    } as const;
 
     const limits = dailyLimits[user.tier];
 

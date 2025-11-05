@@ -5,7 +5,7 @@ import { getUserById } from '../utils/database';
 export interface AuthenticatedUser {
   userId: string;
   email: string;
-  tier: 'free' | 'premium';
+  tier: 'free' | 'premium' | 'tester' | 'developer';
 }
 
 export interface AuthenticatedRequest extends NextApiRequest {

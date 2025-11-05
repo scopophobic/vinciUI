@@ -8,63 +8,25 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
-// Fallback in-memory storage for when database is unavailable
-const tempUsers = new Map();
-
-// Database functions with fallback
+// Strict DB-backed functions (no fallbacks)
 const createUser = async (userData) => {
-  try {
-    const { createUser: dbCreateUser } = await import('./api/utils/database.js');
-    return await dbCreateUser(userData);
-  } catch (error) {
-    console.log('⚠️ Database createUser failed, using fallback:', error.message);
-    // Fallback: in-memory storage - preserve original Google data
-    const user = { 
-      id: Date.now(), 
-      tier: 'free', 
-      ...userData // This preserves the original Google email, name, picture
-    };
-    tempUsers.set(userData.email, user);
-    console.log('✅ Created temp user with original Google data:', user.email);
-    return user;
-  }
+  const { createUser: dbCreateUser } = await import('./api/utils/database.js');
+  return await dbCreateUser(userData);
 };
 
 const getUserByEmail = async (email) => {
-  try {
-    const { getUserByEmail: dbGetUserByEmail } = await import('./api/utils/database.js');
-    return await dbGetUserByEmail(email);
-  } catch (error) {
-    console.log('⚠️ Database getUserByEmail failed, using fallback:', error.message);
-    // Fallback: in-memory storage
-    const user = tempUsers.get(email);
-    console.log('🔍 Getting temp user by email:', email, 'found:', !!user);
-    return user;
-  }
+  const { getUserByEmail: dbGetUserByEmail } = await import('./api/utils/database.js');
+  return await dbGetUserByEmail(email);
 };
 
 const updateUserUsage = async (...args) => {
-  try {
-    const { updateUserUsage: dbUpdateUserUsage } = await import('./api/utils/database.js');
-    return await dbUpdateUserUsage(...args);
-  } catch (error) {
-    console.log('⚠️ Database updateUserUsage failed:', error.message);
-  }
+  const { updateUserUsage: dbUpdateUserUsage } = await import('./api/utils/database.js');
+  return await dbUpdateUserUsage(...args);
 };
 
 const getUserUsage = async (userId) => {
-  try {
-    const { getUserUsage: dbGetUserUsage } = await import('./api/utils/database.js');
-    return await dbGetUserUsage(userId);
-  } catch (error) {
-    console.log('⚠️ Database getUserUsage failed, using fallback:', error.message);
-    // Fallback: default usage
-    return {
-      dailyGenerations: 0,
-      monthlyGenerations: 0,
-      resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000)
-    };
-  }
+  const { getUserUsage: dbGetUserUsage } = await import('./api/utils/database.js');
+  return await dbGetUserUsage(userId);
 };
 import { authenticateToken } from './api/middleware/auth.js';
 import { rateLimitMiddleware } from './api/middleware/rateLimit.js';
@@ -72,6 +34,14 @@ import { contentModerationMiddleware } from './api/middleware/contentModeration.
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
+
+// Ensure DB schema is up to date on startup
+try {
+  const { migrateDatabase } = await import('./api/utils/database.js');
+  await migrateDatabase();
+} catch (e) {
+  console.log('⚠️ Skipping DB migration on startup:', e?.message || e);
+}
 
 const app = express();
 const PORT = 3001;
@@ -91,6 +61,39 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'VinciUI Backend is running!' });
 });
 
+// Auth diagnostics (non-sensitive) - helps verify session quickly
+app.get('/api/auth/debug', async (req, res) => {
+  try {
+    const cookieToken = req.cookies?.auth_token ? 'present' : 'missing';
+    const authHeader = req.headers?.authorization || '';
+    const headerToken = authHeader.startsWith('Bearer ') ? 'present' : 'missing';
+
+    let decoded = null;
+    try {
+      const raw = req.cookies?.auth_token || (authHeader.startsWith('Bearer ') ? authHeader.substring(7) : undefined);
+      if (raw) {
+        decoded = jwt.verify(raw, process.env.JWT_SECRET);
+      }
+    } catch {}
+
+    let dbUser = null;
+    if (decoded?.email) {
+      try {
+        dbUser = await getUserByEmail(decoded.email);
+      } catch {}
+    }
+
+    res.json({
+      cookieToken,
+      headerToken,
+      decoded: decoded ? { userId: decoded.userId, email: decoded.email } : null,
+      dbUser: dbUser ? { id: dbUser.id, email: dbUser.email, tier: dbUser.tier } : null
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'debug_failed' });
+  }
+});
+
 // ==========================================
 // AUTH ROUTES
 // ==========================================
@@ -99,9 +102,8 @@ app.get('/api/health', (req, res) => {
 app.get('/api/auth/google', (req, res) => {
   // Check if OAuth credentials are configured
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    console.log('⚠️ OAuth not configured, using development mode');
-    // Redirect to development callback
-    return res.redirect('http://localhost:3001/api/auth/callback?code=dev_mode');
+    console.log('❌ OAuth not configured');
+    return res.status(500).json({ error: 'OAuth not configured' });
   }
 
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
@@ -125,42 +127,7 @@ app.get('/api/auth/callback', async (req, res) => {
     return res.redirect('http://localhost:5173?error=no_code');
   }
 
-  // Development mode bypass
-  if (code === 'dev_mode') {
-    console.log('🔧 Development mode: Creating mock user...');
-    
-    try {
-      // Create a mock user for development
-      const user = await createUser({
-        googleId: 'dev_123456',
-        email: 'developer@vinciui.dev',
-        name: 'Development User',
-        picture: 'https://via.placeholder.com/40x40/000000/FFFFFF?text=DEV'
-      });
-
-      // Generate JWT
-      const jwtToken = jwt.sign(
-        { userId: user.id, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      // Set secure cookie
-      res.cookie('auth_token', jwtToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
-
-      console.log('✅ Development user authenticated:', user.email);
-      return res.redirect('http://localhost:5173');
-      
-    } catch (error) {
-      console.error('❌ Development auth error:', error);
-      return res.redirect('http://localhost:5173?error=dev_auth_failed');
-    }
-  }
+  // No development bypass; require real OAuth
 
   try {
     console.log('🔄 Processing OAuth callback...');
@@ -230,25 +197,32 @@ app.get('/api/auth/callback', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     console.log('🔍 /api/auth/me called for user:', req.user.email);
-    let user = await getUserByEmail(req.user.email);
-    
-    // If user not found by email, create a fallback user object
+    const user = await getUserByEmail(req.user.email);
     if (!user) {
-      console.log('⚠️ User not found by email, using fallback data');
-      user = {
-        id: req.user.userId,
-        email: req.user.email,
-        tier: req.user.tier || 'free',
-        name: 'Fallback User'
-      };
+      console.log('❌ User not found by email');
+      return res.status(404).json({ error: 'User not found' });
     }
     
     const usage = await getUserUsage(user.id);
     
+    // Map usage to frontend-friendly shape and limits
+    const tier = user.tier || 'free';
+    const dailyLimits = {
+      free: 2,            // lifetime cap enforced separately
+      premium: 100,
+      tester: 50,
+      developer: 1000
+    };
+    
     res.json({
       user: {
         ...user,
-        usage
+        usage: {
+          imagesGenerated: usage?.images_generated ?? 0,
+          promptsEnhanced: usage?.prompts_enhanced ?? 0,
+          dailyLimit: dailyLimits[tier] ?? 2,
+          resetTime: usage?.reset_time ?? new Date(Date.now() + 24*60*60*1000)
+        }
       }
     });
   } catch (error) {
@@ -332,9 +306,24 @@ app.post('/api/generate/image',
 
       // Update user usage
       await updateUserUsage(req.user.userId, 'image');
+
+      // Fetch latest usage to return with response so UI can update immediately
+      let latestUsage;
+      try {
+        latestUsage = await getUserUsage(req.user.userId);
+      } catch (e) {
+        latestUsage = null;
+      }
       
       console.log('✅ Image generated successfully');
-      res.json({ image: imageData });
+      res.json({ 
+        image: imageData,
+        usage: latestUsage ? {
+          imagesGenerated: latestUsage.images_generated ?? 0,
+          promptsEnhanced: latestUsage.prompts_enhanced ?? 0,
+          resetTime: latestUsage.reset_time ?? new Date(Date.now() + 24*60*60*1000)
+        } : undefined
+      });
       
     } catch (error) {
       console.error('❌ Image generation error:', error);

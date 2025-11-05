@@ -219,176 +219,30 @@ function WorkshopApp() {
 
       console.log('Generating with:', { prompt, hasImage: !!imageBase64 });
 
-      // Try direct API call first (for testing), then try serverless function
-      try {
-        // Check if we can call Gemini API directly
-        // const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        // The issue is that you are declaring a variable named `apikey` (all lowercase), 
-        // but later in your code you reference `apiKey` (with a capital K).
-        // JavaScript/TypeScript is case-sensitive, so `apikey` and `apiKey` are different variables.
-        // To fix this, declare the variable as `apiKey`:
+      // Always use protected backend endpoint so limits + usage apply
+      const response = await fetch('http://localhost:3001/api/generate/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          prompt,
+          imageBase64,
+          model: generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview'
+        })
+      });
 
-        // API KEY IS LOADED FROM THE ENV FILE
-        // const apiKey = process.env.VITE_GEMINI_API_KEY;
-        console.log('All env vars:', import.meta.env);
-        const apiKey: string = import.meta.env.VITE_GEMINI_API_KEY;
-        console.log('API Key loaded:', apiKey ? `${apiKey.slice(0, 10)}...` : 'NOT FOUND');
-        
-        if (apiKey && apiKey !== 'your_gemini_api_key_here' && apiKey !== 'your_actual_api_key_here') {
-          // Use the selected image generation model
-          const selectedModel = generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview';
-          let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
-          let modelName = selectedModel === 'gemini-2.5-flash-image-preview' 
-            ? "Gemini 2.5 Flash Image Preview (Nano Banana)" 
-            : "Gemini 2.0 Flash Preview Image Generation (Legacy)";
-          
-          console.log(`Trying ${modelName} API call...`);
-          console.log('⚠️ Note: Free tier has limited quota. If you hit limits, wait or upgrade.');
-          
-          // Simple, direct prompt for image generation (like in the official docs)
-          const promptParts: any[] = [
-            { text: prompt }
-          ];
-          
-          // Add image if provided (for image-to-image generation)
-          if (imageBase64) {
-            promptParts.push({
-              inlineData: {
-                mimeType: "image/png",
-                data: imageBase64
-              }
-            });
-          }
-
-          const payload = {
-            contents: [{
-              parts: promptParts
-            }],
-            generationConfig: {
-              temperature: 0.8,
-              candidateCount: 1,
-              responseModalities: ["TEXT", "IMAGE"]
-            }
-          };
-
-          console.log('Sending payload:', JSON.stringify(payload, null, 2));
-
-          const apiResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-
-          if (apiResponse.ok) {
-            const result = await apiResponse.json();
-            console.log('Gemini API response:', result);
-            
-            // Extract parts like in the official docs
-            const candidates = result?.candidates || [];
-            if (candidates.length > 0) {
-              const parts = candidates[0]?.content?.parts || [];
-              
-              for (const part of parts) {
-                if (part.text) {
-                  console.log('Text response:', part.text);
-                } else if (part.inlineData) {
-                  console.log('🎉 Image generated successfully!');
-                  const imageData = part.inlineData.data;
-                  
-                  const outputNode = nodes.find(n => n.type === 'output');
-                  if (outputNode) {
-                    const imageUrl = `data:image/png;base64,${imageData}`;
-                    updateNodeData(outputNode.id, { imageUrl });
-                  }
-                  return; // Success!
-                }
-              }
-            }
-            
-            // If we get here, no image was generated
-            console.log('No image generated in response');
-            alert('⚠️ No image was generated. Try a different prompt or check if the model supports your request.');
-            
-          } else {
-            const errorText = await apiResponse.text();
-            console.error('Gemini API error:', apiResponse.status, errorText);
-            
-            // Handle quota exceeded specifically
-            if (apiResponse.status === 429) {
-              const errorData = JSON.parse(errorText);
-              const retryDelay = errorData.error?.details?.find((d: any) => d['@type']?.includes('RetryInfo'))?.retryDelay;
-              
-              if (retryDelay) {
-                alert(`⚠️ Quota exceeded! Please wait ${retryDelay} and try again, or upgrade your plan for higher limits.`);
-              } else {
-                alert('⚠️ Quota exceeded! Please wait a few minutes and try again, or upgrade your plan.');
-              }
-            }
-            
-            throw new Error(`Gemini API failed: ${apiResponse.status} - ${errorText}`);
-          }
+      if (response.ok) {
+        const result = await response.json();
+        const outputNode = nodes.find(n => n.type === 'output');
+        if (outputNode) {
+          updateNodeData(outputNode.id, { imageUrl: result.image });
         }
-
-        // Use protected API endpoint
-        console.log('Trying protected API endpoint...');
-        const response = await fetch('http://localhost:3001/api/generate/image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            prompt,
-            imageBase64,
-            model: generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview'
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          const outputNode = nodes.find(n => n.type === 'output');
-          if (outputNode) {
-            updateNodeData(outputNode.id, { imageUrl: result.image });
-          }
-        } else {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(`API Error: ${response.status} - ${errorData.error || 'Authentication required'}`);
-        }
-      } catch (apiError) {
-        console.log('API not available, using development simulation:', apiError instanceof Error ? apiError.message : String(apiError));
-        
-        // Simulate API call for development testing
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Create a development placeholder image
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // Create gradient background
-          const gradient = ctx.createLinearGradient(0, 0, 512, 512);
-          gradient.addColorStop(0, '#4f46e5');
-          gradient.addColorStop(1, '#7c3aed');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, 512, 512);
-          
-          // Add text
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 24px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText('DEVELOPMENT MODE', 256, 180);
-          ctx.font = '16px monospace';
-          ctx.fillText('✓ Authentication Working', 256, 220);
-          ctx.fillText('✓ Database Connected', 256, 250);
-          ctx.fillText('✓ Security Enabled', 256, 280);
-          ctx.font = '12px monospace';
-          ctx.fillText(`Prompt: "${prompt.substring(0, 30)}..."`, 256, 320);
-          
-          const devImage = canvas.toDataURL();
-          const outputNode = nodes.find(n => n.type === 'output');
-          if (outputNode) {
-            updateNodeData(outputNode.id, { imageUrl: devImage });
-          }
-        }
+        // Refresh user usage after successful generation
+        await refreshUser();
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(errorData.error || `API Error: ${response.status}`);
+        throw new Error(`API Error: ${response.status}`);
       }
 
     } catch (error) {
@@ -397,6 +251,10 @@ function WorkshopApp() {
     } finally {
       // Reset generator loading state
       updateNodeData(generatorNode.id, { isGenerating: false });
+      // Ensure usage bar reflects latest counts even after errors/limits
+      try {
+        await refreshUser();
+      } catch {}
     }
   };
 

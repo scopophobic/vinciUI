@@ -1,34 +1,80 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 export function UserProfile() {
   const { user, logout } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
 
   if (!user) return null;
 
   const usagePercentage = (user.usage.imagesGenerated / user.usage.dailyLimit) * 100;
-  const enhancementLimit = user.tier === 'free' ? 5 : user.tier === 'developer' ? 1000 : 200;
+  const enhancementLimit = user.tier === 'free' 
+    ? 5 
+    : user.tier === 'tester' 
+      ? 100 
+      : user.tier === 'developer' 
+        ? 1000 
+        : 200;
+
+  useEffect(() => {
+    function positionPanel() {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const panelWidth = Math.min(384, Math.max(320, Math.floor(window.innerWidth * 0.9))); // 80-96 tailwind widths
+      const horizontalMargin = 8;
+      let left = rect.left;
+      if (left + panelWidth + horizontalMargin > window.innerWidth) {
+        left = window.innerWidth - panelWidth - horizontalMargin;
+      }
+      left = Math.max(horizontalMargin, left);
+      const top = rect.bottom + 8; // 8px gap
+      setPanelStyle({
+        top,
+        left,
+        width: panelWidth,
+        maxWidth: '90vw'
+      });
+    }
+
+    positionPanel();
+    window.addEventListener('resize', positionPanel);
+    window.addEventListener('scroll', positionPanel, true);
+    return () => {
+      window.removeEventListener('resize', positionPanel);
+      window.removeEventListener('scroll', positionPanel, true);
+    };
+  }, [showDropdown]);
   const enhancementPercentage = (user.usage.promptsEnhanced / enhancementLimit) * 100;
+
+  const avatarSrc = user.picture && user.picture.trim()
+    ? user.picture
+    : `/profile.png`;
 
   return (
     <div className="relative">
       <button
+        ref={anchorRef}
         onClick={() => setShowDropdown(!showDropdown)}
         className="flex items-center gap-3 p-2 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200"
       >
         <img 
-          src={user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=6366f1&color=fff`} 
-          alt={user.name}
+          src={avatarSrc}
+          alt={user.name || 'User'}
           className="w-8 h-8 rounded-full"
+          loading="lazy"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/profile.png'; }}
         />
         <div className="text-left">
           <div className="text-sm font-mono text-black">{user.name}</div>
           <div className={`text-xs uppercase tracking-wide ${
             user.tier === 'developer' ? 'text-purple-600 font-bold' : 
-            user.tier === 'premium' ? 'text-blue-600' : 'text-gray-500'
+            user.tier === 'premium' ? 'text-blue-600' : 
+            user.tier === 'tester' ? 'text-amber-600' : 'text-gray-500'
           }`}>
-            {user.tier} {user.tier === 'developer' ? '🔧' : user.tier === 'premium' ? '⭐' : ''} tier
+            {user.tier} {user.tier === 'developer' ? '🔧' : user.tier === 'premium' ? '⭐' : user.tier === 'tester' ? '🧪' : ''} tier
           </div>
         </div>
         <svg 
@@ -42,23 +88,29 @@ export function UserProfile() {
       </button>
 
       {showDropdown && (
-        <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-w-[calc(100vw-2rem)] mr-4">
+        <div
+          className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-[9999]"
+          style={panelStyle}
+        >
           {/* User Info */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center gap-3 mb-3">
               <img 
-                src={user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=6366f1&color=fff`} 
-                alt={user.name}
+                src={avatarSrc}
+                alt={user.name || 'User'}
                 className="w-12 h-12 rounded-full"
+                loading="lazy"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/profile.png'; }}
               />
               <div>
                 <div className="font-mono text-black font-bold">{user.name}</div>
                 <div className="text-sm text-gray-600">{user.email}</div>
                 <div className={`text-xs uppercase tracking-wide mt-1 ${
                   user.tier === 'developer' ? 'text-purple-600 font-bold' : 
-                  user.tier === 'premium' ? 'text-blue-600' : 'text-gray-500'
+                  user.tier === 'premium' ? 'text-blue-600' : 
+                  user.tier === 'tester' ? 'text-amber-600' : 'text-gray-500'
                 }`}>
-                  {user.tier} {user.tier === 'developer' ? '🔧' : user.tier === 'premium' ? '⭐' : ''} tier
+                  {user.tier} {user.tier === 'developer' ? '🔧' : user.tier === 'premium' ? '⭐' : user.tier === 'tester' ? '🧪' : ''} tier
                 </div>
               </div>
             </div>
@@ -100,7 +152,11 @@ export function UserProfile() {
 
             {/* Reset Time */}
             <div className="text-xs text-gray-500">
-              Resets at: {new Date(user.usage.resetTime).toLocaleTimeString()}
+              {user.tier === 'free' ? (
+                <span>Credits do not reset (free tier)</span>
+              ) : (
+                <span>Resets at: {new Date(user.usage.resetTime).toLocaleTimeString()}</span>
+              )}
             </div>
           </div>
 

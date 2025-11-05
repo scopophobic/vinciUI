@@ -43,25 +43,22 @@ export const authenticateToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('✅ Auth middleware - Token verified, userId:', decoded.userId, 'email:', decoded.email);
     
-    // Get user from database
+    // Get user from database (required)
     const user = await getUserById(decoded.userId);
     console.log('🔍 Auth middleware - User lookup result:', !!user);
-    
-    // Use JWT data as fallback if database user not found
-    const userInfo = user || {
-      id: decoded.userId,
-      email: decoded.email,
-      tier: 'free' // Default tier for fallback
-    };
+    if (!user) {
+      console.log('❌ Auth middleware - User not found in database');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
-    // Add user info to request
+    // Add user info to request from DB
     req.user = {
-      userId: userInfo.id,
-      email: userInfo.email,
-      tier: userInfo.tier
+      userId: user.id,
+      email: user.email,
+      tier: user.tier
     };
 
-    console.log('✅ Auth middleware - Success, user:', userInfo.email);
+    console.log('✅ Auth middleware - Success, user:', user.email);
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
