@@ -56,6 +56,15 @@ app.use(cookieParser());
 
 console.log('🚀 Starting VinciUI Backend Server...');
 
+// Helpers to resolve URLs in any environment
+function getApiBaseUrl(req) {
+  return process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+}
+
+function getFrontendOrigin() {
+  return process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+}
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'VinciUI Backend is running!' });
@@ -108,7 +117,7 @@ app.get('/api/auth/google', (req, res) => {
 
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/auth/callback`,
+    redirect_uri: `${getApiBaseUrl(req)}/api/auth/callback`,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -141,7 +150,7 @@ app.get('/api/auth/callback', async (req, res) => {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/auth/callback`
+        redirect_uri: `${getApiBaseUrl(req)}/api/auth/callback`
       })
     });
 
@@ -186,7 +195,7 @@ app.get('/api/auth/callback', async (req, res) => {
     console.log('✅ User authenticated:', user.email);
     console.log('🔗 Redirecting with token to frontend...');
     // Redirect to frontend (in dev include token to ease testing)
-    const frontend = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+    const frontend = getFrontendOrigin();
     if (process.env.NODE_ENV === 'production') {
       res.redirect(`${frontend}?auth_success=true`);
     } else {
