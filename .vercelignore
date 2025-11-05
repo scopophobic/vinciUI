@@ -1,8 +1,0 @@
-# Exclude backend from frontend deployment
-api/**
-server.js
-scripts/**
-# Optional: any server-only assets
-PRODUCTION_SETUP.md
-trash/**
-
