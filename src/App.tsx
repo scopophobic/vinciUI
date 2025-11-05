@@ -220,7 +220,8 @@ function WorkshopApp() {
       console.log('Generating with:', { prompt, hasImage: !!imageBase64 });
 
       // Always use protected backend endpoint so limits + usage apply
-      const response = await fetch('http://localhost:3001/api/generate/image', {
+      const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiBase}/api/generate/image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

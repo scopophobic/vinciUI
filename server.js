@@ -48,7 +48,7 @@ const PORT = 3001;
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5173', // Your Vite frontend
+  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -108,7 +108,7 @@ app.get('/api/auth/google', (req, res) => {
 
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: `http://localhost:3001/api/auth/callback`,
+    redirect_uri: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/auth/callback`,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -141,7 +141,7 @@ app.get('/api/auth/callback', async (req, res) => {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: `http://localhost:3001/api/auth/callback`
+        redirect_uri: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/auth/callback`
       })
     });
 
@@ -174,18 +174,24 @@ app.get('/api/auth/callback', async (req, res) => {
     );
 
     // Set secure cookie
+    const isProd = (process.env.NODE_ENV === 'production');
     res.cookie('auth_token', jwtToken, {
       httpOnly: true,
-      secure: false, // Set to true in production
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/' // Ensure cookie is available for all paths
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/'
     });
 
     console.log('✅ User authenticated:', user.email);
     console.log('🔗 Redirecting with token to frontend...');
-    // Redirect with token in URL for development (frontend will handle it)
-    res.redirect(`http://localhost:5173?auth_success=true&token=${encodeURIComponent(jwtToken)}`);
+    // Redirect to frontend (in dev include token to ease testing)
+    const frontend = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+    if (process.env.NODE_ENV === 'production') {
+      res.redirect(`${frontend}?auth_success=true`);
+    } else {
+      res.redirect(`${frontend}?auth_success=true&token=${encodeURIComponent(jwtToken)}`);
+    }
     
   } catch (error) {
     console.error('❌ OAuth callback error:', error);

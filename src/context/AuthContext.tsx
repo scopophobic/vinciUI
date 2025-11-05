@@ -78,7 +78,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
-      const response = await fetch('http://localhost:3001/api/auth/me', {
+      const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiBase}/api/auth/me`, {
         credentials: 'include',
         headers
       });
@@ -108,12 +109,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = () => {
     // Always use real OAuth for production-ready app
-    window.location.href = 'http://localhost:3001/api/auth/google';
+    const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+    window.location.href = `${apiBase}/api/auth/google`;
   };
 
   const logout = async () => {
     try {
-      await fetch('http://localhost:3001/api/auth/logout', {
+      const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+      await fetch(`${apiBase}/api/auth/logout`, {
         method: 'POST',
         credentials: 'include'
       });
