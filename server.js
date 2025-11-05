@@ -58,7 +58,13 @@ console.log('🚀 Starting VinciUI Backend Server...');
 
 // Helpers to resolve URLs in any environment
 function getApiBaseUrl(req) {
-  return process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  if (process.env.API_BASE_URL) {
+    return process.env.API_BASE_URL;
+  }
+  // Fallback: derive from request (only for development)
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:3001';
+  return `${protocol}://${host}`;
 }
 
 function getFrontendOrigin() {
@@ -155,9 +161,13 @@ app.get('/api/auth/google', (req, res) => {
     return res.status(500).json({ error: 'OAuth not configured' });
   }
 
+  const redirectUri = `${getApiBaseUrl(req)}/api/auth/callback`;
+  console.log('🔐 OAuth redirect URI:', redirectUri);
+  console.log('🔐 API_BASE_URL env:', process.env.API_BASE_URL || 'NOT SET');
+
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: `${getApiBaseUrl(req)}/api/auth/callback`,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -173,13 +183,18 @@ app.get('/api/auth/callback', async (req, res) => {
   const { code } = req.query;
   
   if (!code) {
-    return res.redirect('http://localhost:5173?error=no_code');
+    const frontend = getFrontendOrigin();
+    return res.redirect(`${frontend}?error=no_code`);
   }
 
   // No development bypass; require real OAuth
 
   try {
     console.log('🔄 Processing OAuth callback...');
+    
+    const redirectUri = `${getApiBaseUrl(req)}/api/auth/callback`;
+    console.log('🔐 OAuth callback redirect URI:', redirectUri);
+    console.log('🔐 API_BASE_URL env:', process.env.API_BASE_URL || 'NOT SET');
     
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -190,7 +205,7 @@ app.get('/api/auth/callback', async (req, res) => {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: 'authorization_code',
-        redirect_uri: `${getApiBaseUrl(req)}/api/auth/callback`
+        redirect_uri: redirectUri
       })
     });
 
@@ -244,7 +259,8 @@ app.get('/api/auth/callback', async (req, res) => {
     
   } catch (error) {
     console.error('❌ OAuth callback error:', error);
-    res.redirect('http://localhost:5173?error=auth_failed');
+    const frontend = getFrontendOrigin();
+    res.redirect(`${frontend}?error=auth_failed`);
   }
 });
 
