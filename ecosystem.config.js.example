@@ -1,0 +1,18 @@
+module.exports = {
+  apps: [{
+    name: 'vinci-backend',
+    script: './server.js',
+    env: {
+      NODE_ENV: 'production',
+      API_BASE_URL: 'https://api.vinci.scopophobic.xyz',
+      FRONTEND_ORIGIN: 'https://vinci.scopophobic.xyz',
+      DATABASE_URL: 'postgres://user:pass@host:5432/dbname',
+      GOOGLE_CLIENT_ID: 'your_google_client_id',
+      GOOGLE_CLIENT_SECRET: 'your_google_client_secret',
+      GEMINI_API_KEY: 'your_gemini_api_key',
+      JWT_SECRET: 'your_long_random_secret'
+    }
+  }]
+};
+
+

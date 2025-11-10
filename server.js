@@ -212,7 +212,14 @@ app.get('/api/auth/callback', async (req, res) => {
     const tokens = await tokenResponse.json();
     
     if (!tokens.access_token) {
-      throw new Error('No access token received');
+      console.error('❌ Token exchange failed:', tokens);
+      if (tokens.error === 'redirect_uri_mismatch') {
+        console.error('❌ REDIRECT URI MISMATCH!');
+        console.error('   Expected by Google:', tokens.error_description);
+        console.error('   Sent by us:', redirectUri);
+        console.error('   API_BASE_URL:', process.env.API_BASE_URL || 'NOT SET');
+      }
+      throw new Error(`Token exchange failed: ${tokens.error || 'Unknown error'}`);
     }
 
     // Get user info from Google
@@ -480,3 +487,5 @@ app.listen(PORT, () => {
 });
 
 export default app;
+
+
