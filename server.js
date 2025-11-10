@@ -68,7 +68,12 @@ function getApiBaseUrl(req) {
 }
 
 function getFrontendOrigin() {
-  return process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  const raw = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  // Normalize to absolute URL. If no scheme provided, default to https in prod.
+  const hasScheme = /^https?:\/\//i.test(raw);
+  if (hasScheme) return raw;
+  const scheme = (process.env.NODE_ENV === 'production') ? 'https' : 'http';
+  return `${scheme}://${raw}`;
 }
 
 // Root endpoint
