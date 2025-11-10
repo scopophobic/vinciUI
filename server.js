@@ -255,6 +255,7 @@ app.get('/api/auth/callback', async (req, res) => {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
+      domain: isProd ? '.scopophobic.xyz' : undefined,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/'
     });
@@ -484,8 +485,8 @@ Enhanced prompt:`;
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ Backend Server running on http://localhost:${PORT}`);
-  console.log(`🔗 Frontend: http://localhost:5173`);
+console.log(`✅ Backend Server running on http://localhost:${PORT}`);
+console.log(`🔗 Frontend: ${getFrontendOrigin()}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('');
   console.log('🚀 Ready for OAuth and image generation!');
