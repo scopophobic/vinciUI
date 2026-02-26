@@ -62,7 +62,7 @@ export const rateLimitMiddleware = async (req, res, next) => {
       }
     }
     
-    if (endpoint.includes('/generate/enhance')) {
+    if (endpoint.includes('/generate/enhance') || endpoint.includes('/generate/refine')) {
       if ((usage.prompts_enhanced || 0) >= limits.enhancementsPerDay) {
         return res.status(429).json({
           error: 'Daily prompt enhancement limit exceeded',
