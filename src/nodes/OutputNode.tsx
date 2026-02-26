@@ -2,7 +2,9 @@ import { Handle, Position } from 'reactflow';
 
 interface OutputNodeData {
   imageUrl: string;
-  onChange: (data: { imageUrl: string }) => void;
+  imageBase64: string;
+  currentPrompt: string;
+  onChange: (data: any) => void;
 }
 
 interface OutputNodeProps {
@@ -14,7 +16,7 @@ export function OutputNode({ data }: OutputNodeProps) {
     if (data.imageUrl) {
       const link = document.createElement('a');
       link.href = data.imageUrl;
-      link.download = 'generated-image.png';
+      link.download = `vinci-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -22,30 +24,61 @@ export function OutputNode({ data }: OutputNodeProps) {
   };
 
   return (
-    <div className="p-4 border border-orange-200 bg-white shadow-lg rounded-lg w-64 hover:shadow-xl transition-all duration-300 font-mono" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.1), 0 0 0 1px rgba(249, 115, 22, 0.1)' }}>
-      <Handle type="target" position={Position.Left} className="w-3 h-3 bg-orange-500" />
-      
-      <div className="flex items-center mb-3">
-        <label className="text-sm font-mono uppercase tracking-wide text-black">Output</label>
+    <div
+      className="p-4 border border-orange-200 bg-white shadow-lg rounded-lg hover:shadow-xl transition-all duration-300 font-mono"
+      style={{
+        width: 280,
+        boxShadow:
+          '0 4px 12px rgba(0,0,0,0.1), 0 0 0 1px rgba(249, 115, 22, 0.1)',
+      }}
+    >
+      {/* Target: receives image from Generator */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-3 h-3 bg-orange-500"
+      />
+      {/* Source: feeds image as input to another Generator */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-3 h-3 bg-orange-500"
+      />
+
+      <div className="flex items-center justify-between mb-3">
+        <label className="text-sm font-mono uppercase tracking-wide text-black font-bold">
+          Output
+        </label>
+        {data.imageBase64 && (
+          <span className="text-xs text-green-600">● connectable</span>
+        )}
       </div>
-      
-      <div className="w-full h-48 border border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+
+      <div className="w-full h-48 border border-dashed border-gray-300 flex items-center justify-center bg-gray-50 rounded overflow-hidden">
         {data.imageUrl ? (
-          <img 
-            src={data.imageUrl} 
-            alt="Generated" 
+          <img
+            src={data.imageUrl}
+            alt="Generated"
             className="max-w-full max-h-full object-contain"
           />
         ) : (
           <div className="text-center">
-            <div className="w-12 h-12 border border-gray-400 mb-2 mx-auto"></div>
-            <span className="text-xs text-gray-500 font-mono">
-              Output appears here
+            <div className="w-12 h-12 border border-gray-300 mb-2 mx-auto rounded" />
+            <span className="text-xs text-gray-400 font-mono">
+              Waiting for generation...
             </span>
           </div>
         )}
       </div>
-      
+
+      {data.currentPrompt && (
+        <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600 break-words">
+          {data.currentPrompt.length > 100
+            ? `${data.currentPrompt.slice(0, 100)}...`
+            : data.currentPrompt}
+        </div>
+      )}
+
       {data.imageUrl && (
         <button
           onClick={handleDownload}
@@ -54,7 +87,12 @@ export function OutputNode({ data }: OutputNodeProps) {
           Download
         </button>
       )}
+
+      {data.imageBase64 && (
+        <div className="mt-2 text-xs text-gray-400 text-center">
+          Drag from → to feed into another Generator
+        </div>
+      )}
     </div>
   );
 }
-

@@ -15,31 +15,23 @@ import { PromptNode } from './nodes/PromptNode';
 import { ImageInputNode } from './nodes/ImageInputNode';
 import { GeneratorNode } from './nodes/GeneratorNode';
 import { OutputNode } from './nodes/OutputNode';
-import { ImageStitchNode } from './nodes/ImageStitchNode';
-import { PromptEnhancerNode } from './nodes/PromptEnhancerNode';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/Auth/LoginPage';
 import { UserProfile } from './components/Auth/UserProfile';
 import { AuthProvider, useAuth } from './context/AuthContext';
-// import * as dotenv from 'dotenv';
+import * as api from './services/api';
 
-// dotenv.config({ path: '.env.local' });
-
-// This maps the 'type' string in your node data to the actual component
 const nodeTypes = {
   prompt: PromptNode,
   imageInput: ImageInputNode,
   generator: GeneratorNode,
   output: OutputNode,
-  imageStitch: ImageStitchNode,
-  promptEnhancer: PromptEnhancerNode,
 };
 
 function WorkshopApp() {
-  const { user, isAuthenticated, refreshUser } = useAuth();
+  const { isAuthenticated, refreshUser } = useAuth();
   const [showLanding, setShowLanding] = useState(true);
 
-  // Define a function to update data within a node
   const updateNodeData = (nodeId: string, newData: any) => {
     setNodes((nds) =>
       nds.map((node) =>
@@ -48,64 +40,39 @@ function WorkshopApp() {
           : node
       )
     );
-    
-    // Update connected nodes when source data changes
     setTimeout(() => updateConnectedNodes(), 100);
   };
 
-  // Function to collect images for stitch nodes
-  const collectImagesForStitchNode = (stitchNodeId: string) => {
-    const connectedEdges = edges.filter(e => e.target === stitchNodeId);
-    const imageData: string[] = [];
-    
-    connectedEdges.forEach(edge => {
-      const sourceNode = nodes.find(n => n.id === edge.source);
-      if (sourceNode && sourceNode.type === 'imageInput' && sourceNode.data.imageBase64) {
-        imageData.push(sourceNode.data.imageBase64);
-      }
-    });
-    
-    return imageData;
-  };
-
-  // Define the initial state of the graph
   const initialNodes: Node[] = [
-    { 
-      id: '1', 
-      type: 'prompt', 
-      position: { x: 50, y: 50 }, 
-      data: { 
-        prompt: 'A cat wizard casting a spell.', 
-        onChange: (data: any) => updateNodeData('1', data) 
-      } 
+    {
+      id: '1',
+      type: 'prompt',
+      position: { x: 50, y: 125 },
+      data: {
+        prompt: 'A cat wizard casting a spell.',
+        onChange: (data: any) => updateNodeData('1', data),
+      },
     },
-    { 
-      id: '2', 
-      type: 'imageInput', 
-      position: { x: 50, y: 200 }, 
-      data: { 
-        imageBase64: '', 
-        onChange: (data: any) => updateNodeData('2', data) 
-      } 
-    },
-    { 
-      id: '3', 
-      type: 'generator', 
-      position: { x: 400, y: 125 }, 
-      data: { 
+    {
+      id: '2',
+      type: 'generator',
+      position: { x: 400, y: 100 },
+      data: {
         isGenerating: false,
-        selectedModel: 'gemini-2.5-flash-image-preview' as const,
-        onChange: (data: any) => updateNodeData('3', data) 
-      } 
-    },
-    { 
-      id: '4', 
-      type: 'output', 
-      position: { x: 750, y: 125 }, 
-      data: { 
-        imageUrl: '', 
-        onChange: (data: any) => updateNodeData('4', data) 
-      } 
+        selectedModel: 'gemini-2.5-flash-image-preview',
+        seed: null,
+        lockSeed: false,
+        autoRefine: true,
+        refinedPrompt: '',
+        showRefineDialog: false,
+        refineQuestions: [],
+        isRefining: false,
+        lastPrompt: '',
+        promptHistory: [],
+        onChange: (data: any) => updateNodeData('2', data),
+        onGenerate: () => handleGenerate('2'),
+        onRefine: (mode: string, extra?: any) => handleRefine('2', mode, extra),
+      },
     },
   ];
 
@@ -118,142 +85,224 @@ function WorkshopApp() {
     (params: Connection) => {
       const newEdges = addEdge(params, [...edges]);
       setEdges(newEdges);
-      // Update connected nodes after connection
       setTimeout(() => updateConnectedNodes(), 100);
-    }, 
+    },
     [edges, setEdges]
   );
 
-  // Function to update nodes with connected data
   const updateConnectedNodes = () => {
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        // Update Image Stitch nodes
-        if (node.type === 'imageStitch') {
-          const connectedEdges = edges.filter(e => e.target === node.id);
-          const imageData: string[] = [];
-          
-          connectedEdges.forEach(edge => {
-            const sourceNode = currentNodes.find(n => n.id === edge.source);
-            if (sourceNode && sourceNode.type === 'imageInput' && sourceNode.data.imageBase64) {
-              imageData.push(sourceNode.data.imageBase64);
-            }
-          });
-          
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              images: imageData
-            }
-          };
-        }
-        
-        // Update Prompt Enhancer nodes
-        if (node.type === 'promptEnhancer') {
-          const connectedEdges = edges.filter(e => e.target === node.id);
-          let inputPrompt = node.data.inputPrompt;
-          let referenceImage = '';
-          
-          connectedEdges.forEach(edge => {
-            const sourceNode = currentNodes.find(n => n.id === edge.source);
-            if (sourceNode) {
-              if (edge.targetHandle === 'prompt' && sourceNode.data.prompt) {
-                inputPrompt = sourceNode.data.prompt;
-              } else if (edge.targetHandle === 'image' && sourceNode.data.imageBase64) {
-                referenceImage = sourceNode.data.imageBase64;
-              }
-            }
-          });
-          
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              inputPrompt,
-              referenceImage
-            }
-          };
-        }
-        
-        return node;
-      })
-    );
+    // No automatic data propagation needed in simplified architecture.
+    // Images and prompts are resolved at generation time via graph traversal.
   };
 
-  const handleGenerate = async () => {
-    const generatorNode = nodes.find(n => n.type === 'generator');
+  const resolveGeneratorInputs = (generatorNodeId: string) => {
+    const currentNodes = nodes;
+    const currentEdges = edges;
+
+    const promptEdge = currentEdges.find(
+      (e) => e.target === generatorNodeId && e.targetHandle === 'prompt'
+    );
+    const imageEdges = currentEdges.filter(
+      (e) => e.target === generatorNodeId && e.targetHandle === 'image'
+    );
+
+    const promptNode = promptEdge
+      ? currentNodes.find((n) => n.id === promptEdge.source)
+      : null;
+
+    let prompt = promptNode?.data.prompt || '';
+
+    const images: string[] = [];
+    imageEdges.forEach((edge) => {
+      const src = currentNodes.find((n) => n.id === edge.source);
+      if (
+        src &&
+        (src.type === 'imageInput' || src.type === 'output') &&
+        src.data.imageBase64
+      ) {
+        images.push(src.data.imageBase64);
+      }
+    });
+
+    return { prompt, images };
+  };
+
+  const handleRefine = async (
+    generatorNodeId: string,
+    mode: string,
+    extra?: any
+  ) => {
+    const { prompt, images } = resolveGeneratorInputs(generatorNodeId);
+
+    if (!prompt.trim() && mode !== 'apply') {
+      alert('Connect a prompt node first!');
+      return;
+    }
+
+    updateNodeData(generatorNodeId, { isRefining: true });
+
+    try {
+      const result = await api.refinePrompt({
+        prompt: mode === 'apply' ? extra?.originalPrompt || prompt : prompt,
+        mode: mode as 'auto' | 'questions' | 'apply',
+        referenceImages: images,
+        answers: mode === 'apply' ? extra?.answers : undefined,
+      });
+
+      if (mode === 'questions') {
+        const qResult = result as api.RefineQuestionsResponse;
+        updateNodeData(generatorNodeId, {
+          refineQuestions: qResult.questions || [],
+          showRefineDialog: true,
+          isRefining: false,
+        });
+      } else {
+        const pResult = result as api.RefinePromptResponse;
+        updateNodeData(generatorNodeId, {
+          refinedPrompt: pResult.refinedPrompt || '',
+          showRefineDialog: false,
+          refineQuestions: [],
+          isRefining: false,
+        });
+      }
+    } catch (error) {
+      console.error('Refine failed:', error);
+      updateNodeData(generatorNodeId, { isRefining: false });
+    }
+  };
+
+  const handleGenerate = async (generatorNodeId?: string) => {
+    const generatorNode = generatorNodeId
+      ? nodes.find((n) => n.id === generatorNodeId)
+      : nodes.find((n) => n.type === 'generator');
+
     if (!generatorNode) {
       alert('No generator node found!');
       return;
     }
 
-    // Update generator node to show loading state
     updateNodeData(generatorNode.id, { isGenerating: true });
 
     try {
-      // Graph traversal: Find connected inputs
-      const promptEdge = edges.find(e => e.target === generatorNode.id && e.targetHandle === 'prompt');
-      const imageEdge = edges.find(e => e.target === generatorNode.id && e.targetHandle === 'image');
+      const { prompt, images } = resolveGeneratorInputs(generatorNode.id);
 
-      const promptNode = promptEdge ? nodes.find(n => n.id === promptEdge.source) : null;
-      const imageNode = imageEdge ? nodes.find(n => n.id === imageEdge.source) : null;
-
-      // Handle different prompt sources (direct prompt or enhanced prompt)
-      let prompt = promptNode?.data.prompt;
-      if (promptNode?.type === 'promptEnhancer') {
-        prompt = promptNode.data.enhancedPrompt || promptNode.data.inputPrompt;
-      }
-
-      // Handle different image sources (direct image or stitched images)
-      let imageBase64 = imageNode?.data.imageBase64;
-      if (imageNode?.type === 'imageStitch') {
-        imageBase64 = imageNode.data.stitchedImage;
-      }
-
-      if (!prompt || prompt.trim() === '') {
-        alert('Please connect a prompt node with text or add a prompt!');
+      if (!prompt.trim()) {
+        alert('Please connect a prompt node with text!');
         updateNodeData(generatorNode.id, { isGenerating: false });
         return;
       }
 
-      console.log('Generating with:', { prompt, hasImage: !!imageBase64 });
+      let actualPrompt = prompt;
 
-      // Always use protected backend endpoint so limits + usage apply
-      const rawBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
-      const apiBase = /^https?:\/\//i.test(rawBase) ? rawBase : `https://${rawBase}`;
-      const response = await fetch(`${apiBase}/api/generate/image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          prompt,
-          imageBase64,
-          model: generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview'
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const outputNode = nodes.find(n => n.type === 'output');
-        if (outputNode) {
-          updateNodeData(outputNode.id, { imageUrl: result.image });
+      if (generatorNode.data.autoRefine) {
+        try {
+          const refineResult = await api.refinePrompt({
+            prompt,
+            mode: 'auto',
+            referenceImages: images,
+          }) as api.RefinePromptResponse;
+          if (refineResult.refinedPrompt) {
+            actualPrompt = refineResult.refinedPrompt;
+            updateNodeData(generatorNode.id, { refinedPrompt: actualPrompt });
+          }
+        } catch {
+          // Auto-refine failed silently, use original prompt
         }
-        // Refresh user usage after successful generation
-        await refreshUser();
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || `API Error: ${response.status}`);
-        throw new Error(`API Error: ${response.status}`);
       }
 
+      if (generatorNode.data.refinedPrompt && !generatorNode.data.autoRefine) {
+        actualPrompt = generatorNode.data.refinedPrompt;
+      }
+
+      const seed = generatorNode.data.lockSeed
+        ? generatorNode.data.seed
+        : null;
+      const model =
+        generatorNode.data.selectedModel || 'gemini-2.5-flash-image-preview';
+
+      const result = await api.generateImage({
+        prompt: actualPrompt,
+        images,
+        model,
+        seed,
+      });
+
+      const imageBase64 = result.image.replace(
+        /^data:image\/\w+;base64,/,
+        ''
+      );
+
+      const existingOutputEdge = edges.find(
+        (e) =>
+          e.source === generatorNode.id &&
+          nodes.find((n) => n.id === e.target)?.type === 'output'
+      );
+
+      const historyEntry = {
+        id: `pv-${Date.now()}`,
+        prompt,
+        refinedPrompt:
+          actualPrompt !== prompt ? actualPrompt : undefined,
+        parentId:
+          generatorNode.data.promptHistory?.length > 0
+            ? generatorNode.data.promptHistory[
+                generatorNode.data.promptHistory.length - 1
+              ].id
+            : null,
+        timestamp: Date.now(),
+        source: generatorNode.data.autoRefine
+          ? ('auto-refine' as const)
+          : ('manual' as const),
+      };
+
+      updateNodeData(generatorNode.id, {
+        lastPrompt: actualPrompt,
+        promptHistory: [
+          ...(generatorNode.data.promptHistory || []),
+          historyEntry,
+        ],
+      });
+
+      if (existingOutputEdge) {
+        updateNodeData(existingOutputEdge.target, {
+          imageUrl: result.image,
+          imageBase64,
+          currentPrompt: actualPrompt,
+        });
+      } else {
+        const newId = `output-${Date.now()}`;
+        const pos = {
+          x: generatorNode.position.x + 380,
+          y: generatorNode.position.y,
+        };
+        const newNode: Node = {
+          id: newId,
+          type: 'output',
+          position: pos,
+          data: {
+            imageUrl: result.image,
+            imageBase64,
+            currentPrompt: actualPrompt,
+            onChange: (data: any) => updateNodeData(newId, data),
+          },
+        };
+        setNodes((nds) => [...nds, newNode]);
+        setEdges((eds) => [
+          ...eds,
+          {
+            id: `e-${generatorNode.id}-${newId}`,
+            source: generatorNode.id,
+            target: newId,
+          },
+        ]);
+      }
+
+      await refreshUser();
     } catch (error) {
       console.error('Generation failed:', error);
       alert('Generation failed. Please try again.');
     } finally {
-      // Reset generator loading state
       updateNodeData(generatorNode.id, { isGenerating: false });
-      // Ensure usage bar reflects latest counts even after errors/limits
       try {
         await refreshUser();
       } catch {}
@@ -265,13 +314,16 @@ function WorkshopApp() {
     const newNode: Node = {
       id: newId,
       type: 'prompt',
-      position: { x: Math.random() * 300 + 50, y: Math.random() * 300 + 50 },
+      position: {
+        x: Math.random() * 300 + 50,
+        y: Math.random() * 300 + 50,
+      },
       data: {
         prompt: '',
-        onChange: (data: any) => updateNodeData(newId, data)
-      }
+        onChange: (data: any) => updateNodeData(newId, data),
+      },
     };
-    setNodes(nds => [...nds, newNode]);
+    setNodes((nds) => [...nds, newNode]);
   };
 
   const addImageNode = () => {
@@ -279,51 +331,48 @@ function WorkshopApp() {
     const newNode: Node = {
       id: newId,
       type: 'imageInput',
-      position: { x: Math.random() * 300 + 50, y: Math.random() * 300 + 200 },
+      position: {
+        x: Math.random() * 300 + 50,
+        y: Math.random() * 300 + 200,
+      },
       data: {
         imageBase64: '',
-        onChange: (data: any) => updateNodeData(newId, data)
-      }
-    };
-    setNodes(nds => [...nds, newNode]);
-  };
-
-  const addImageStitchNode = () => {
-    const newId = `stitch-${Date.now()}`;
-    const newNode: Node = {
-      id: newId,
-      type: 'imageStitch',
-      position: { x: Math.random() * 300 + 200, y: Math.random() * 300 + 100 },
-      data: {
-        images: [],
-        stitchedImage: '',
-        layout: 'horizontal' as const,
-        nodeId: newId,
         onChange: (data: any) => updateNodeData(newId, data),
-        getConnectedImages: () => collectImagesForStitchNode(newId)
-      }
+      },
     };
-    setNodes(nds => [...nds, newNode]);
+    setNodes((nds) => [...nds, newNode]);
   };
 
-  const addPromptEnhancerNode = () => {
-    const newId = `enhancer-${Date.now()}`;
+  const addGeneratorNode = () => {
+    const newId = `generator-${Date.now()}`;
     const newNode: Node = {
       id: newId,
-      type: 'promptEnhancer',
-      position: { x: Math.random() * 300 + 100, y: Math.random() * 300 + 50 },
+      type: 'generator',
+      position: {
+        x: Math.random() * 300 + 200,
+        y: Math.random() * 300 + 100,
+      },
       data: {
-        inputPrompt: '',
-        enhancedPrompt: '',
-        isEnhancing: false,
-        enhancementStyle: 'detailed' as const,
-        onChange: (data: any) => updateNodeData(newId, data)
-      }
+        isGenerating: false,
+        selectedModel: 'gemini-2.5-flash-image-preview',
+        seed: null,
+        lockSeed: false,
+        autoRefine: true,
+        refinedPrompt: '',
+        showRefineDialog: false,
+        refineQuestions: [],
+        isRefining: false,
+        lastPrompt: '',
+        promptHistory: [],
+        onChange: (data: any) => updateNodeData(newId, data),
+        onGenerate: () => handleGenerate(newId),
+        onRefine: (mode: string, extra?: any) =>
+          handleRefine(newId, mode, extra),
+      },
     };
-    setNodes(nds => [...nds, newNode]);
+    setNodes((nds) => [...nds, newNode]);
   };
 
-  // Show landing page or workshop
   if (!isAuthenticated) {
     if (showLanding) {
       return <LandingPage onEnter={() => setShowLanding(false)} />;
@@ -332,38 +381,28 @@ function WorkshopApp() {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }} className="bg-white font-mono relative">
-      {/* Dot pattern background */}
-      <div 
-        className="fixed inset-0 z-0" 
+    <div
+      style={{ width: '100vw', height: '100vh' }}
+      className="bg-white font-mono relative"
+    >
+      <div
+        className="fixed inset-0 z-0"
         style={{
-          background: 'rgb(255, 255, 255) radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.35) 1px, transparent 0px) 0% 0% / 20px 20px'
+          background:
+            'rgb(255, 255, 255) radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.35) 1px, transparent 0px) 0% 0% / 20px 20px',
         }}
       />
       <ReactFlowProvider>
         <div className="absolute top-6 left-6 z-10 flex gap-2 flex-wrap">
-          {/* User Profile */}
           <UserProfile />
         </div>
-        
+
         <div className="absolute top-6 left-80 z-10 flex gap-2 flex-wrap">
-          <button
-            onClick={handleGenerate}
-            className="px-4 py-2 bg-black text-white border border-gray-300 hover:bg-gray-800 transition-colors text-sm font-mono uppercase tracking-wide"
-          >
-            Generate
-          </button>
           <button
             onClick={addPromptNode}
             className="px-3 py-2 bg-white text-black border border-gray-300 hover:bg-gray-50 transition-colors text-xs font-mono uppercase tracking-wide"
           >
             + Prompt
-          </button>
-          <button
-            onClick={addPromptEnhancerNode}
-            className="px-3 py-2 bg-white text-indigo-600 border border-indigo-300 hover:bg-indigo-50 transition-colors text-xs font-mono uppercase tracking-wide"
-          >
-            + Enhancer
           </button>
           <button
             onClick={addImageNode}
@@ -372,10 +411,10 @@ function WorkshopApp() {
             + Image
           </button>
           <button
-            onClick={addImageStitchNode}
-            className="px-3 py-2 bg-white text-cyan-600 border border-cyan-300 hover:bg-cyan-50 transition-colors text-xs font-mono uppercase tracking-wide"
+            onClick={addGeneratorNode}
+            className="px-3 py-2 bg-white text-purple-600 border border-purple-300 hover:bg-purple-50 transition-colors text-xs font-mono uppercase tracking-wide"
           >
-            + Stitch
+            + Generator
           </button>
         </div>
         <ReactFlow
@@ -390,7 +429,7 @@ function WorkshopApp() {
           defaultEdgeOptions={{
             type: 'bezier',
             style: { strokeWidth: 1.5, stroke: '#666' },
-            animated: false
+            animated: false,
           }}
         >
           <Controls className="bg-white border border-gray-200" />
@@ -400,7 +439,6 @@ function WorkshopApp() {
   );
 }
 
-// Main App component with authentication
 function App() {
   return (
     <AuthProvider>

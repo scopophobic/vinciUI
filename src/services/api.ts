@@ -1,58 +1,89 @@
-// API service for communicating with the backend
+function getApiBase(): string {
+  const raw = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
+async function request<T>(path: string, body: any): Promise<T> {
+  const response = await fetch(`${getApiBase()}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || err.message || `API ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export interface GenerateImageRequest {
   prompt: string;
-  imageBase64?: string;
+  images?: string[];
+  model?: string;
+  seed?: number | null;
 }
 
 export interface GenerateImageResponse {
   image: string;
-  success: boolean;
-  message?: string;
+  usage?: {
+    imagesGenerated: number;
+    promptsEnhanced: number;
+    resetTime: string;
+  };
 }
 
-export class ApiService {
-  private baseUrl: string;
-
-  constructor() {
-    this.baseUrl = import.meta.env.VITE_API_URL || '';
-  }
-
-  async generateImage(request: GenerateImageRequest): Promise<GenerateImageResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(errorData.message || `HTTP ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('API call failed:', error);
-      throw error;
-    }
-  }
-
-  // For development/testing - simulate API call
-  async simulateGeneration(request: GenerateImageRequest): Promise<GenerateImageResponse> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          image: 'https://via.placeholder.com/512x512/4f46e5/ffffff?text=Generated+Image',
-          success: true,
-          message: 'Simulated generation complete'
-        });
-      }, 2000);
-    });
-  }
+export interface RefineRequest {
+  prompt: string;
+  mode: 'auto' | 'questions' | 'apply';
+  referenceImages?: string[];
+  answers?: { question: string; answer: string }[];
 }
 
-export const apiService = new ApiService();
+export interface RefineQuestionsResponse {
+  questions: { question: string; options: string[]; answer: string }[];
+}
 
+export interface RefinePromptResponse {
+  refinedPrompt: string;
+}
+
+export async function generateImage(req: GenerateImageRequest): Promise<GenerateImageResponse> {
+  return request('/api/generate/image', req);
+}
+
+export async function refinePrompt(req: RefineRequest): Promise<RefinePromptResponse | RefineQuestionsResponse> {
+  return request('/api/generate/refine', req);
+}
+
+export async function fetchUser(): Promise<any> {
+  const apiBase = getApiBase();
+  const token = localStorage.getItem('auth_token');
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${apiBase}/api/auth/me`, {
+    credentials: 'include',
+    headers,
+  });
+
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export async function logout(): Promise<void> {
+  const apiBase = getApiBase();
+  await fetch(`${apiBase}/api/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  localStorage.removeItem('auth_token');
+}
+
+export function getLoginUrl(): string {
+  return `${getApiBase()}/api/auth/google`;
+}

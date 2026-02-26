@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import * as api from '../services/api';
 
 export interface User {
   id: string;
@@ -68,40 +69,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const checkAuthStatus = async () => {
     try {
-      // Get token from localStorage for development
-      const token = localStorage.getItem('auth_token');
-      const headers: HeadersInit = {};
-      
-      console.log('🔍 Checking auth status with token:', !!token);
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const rawBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
-      const apiBase = /^https?:\/\//i.test(rawBase) ? rawBase : `https://${rawBase}`;
-      const response = await fetch(`${apiBase}/api/auth/me`, {
-        credentials: 'include',
-        headers
-      });
-      
-      console.log('🔍 Auth API response:', response.status, response.ok);
-
-      if (response.ok) {
-        const data = await response.json();
+      const data = await api.fetchUser();
+      if (data?.user) {
         setUser({
           ...data.user,
           usage: {
             ...data.user.usage,
-            resetTime: new Date(data.user.usage.resetTime)
-          }
+            resetTime: new Date(data.user.usage.resetTime),
+          },
         });
       } else {
         setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      // In development, API might not be available - that's okay
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -109,27 +90,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const login = () => {
-    // Always use real OAuth for production-ready app
-    const rawBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
-    const apiBase = /^https?:\/\//i.test(rawBase) ? rawBase : `https://${rawBase}`;
-    window.location.href = `${apiBase}/api/auth/google`;
+    window.location.href = api.getLoginUrl();
   };
 
   const logout = async () => {
     try {
-      const rawBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
-      const apiBase = /^https?:\/\//i.test(rawBase) ? rawBase : `https://${rawBase}`;
-      await fetch(`${apiBase}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      // Clear localStorage token
-      localStorage.removeItem('auth_token');
+      await api.logout();
       setUser(null);
       window.location.href = '/';
     } catch (error) {
       console.error('Logout failed:', error);
-      // Force logout on client side even if API fails
       localStorage.removeItem('auth_token');
       setUser(null);
       window.location.href = '/';
