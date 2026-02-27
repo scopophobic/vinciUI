@@ -325,39 +325,53 @@ app.post('/api/auth/logout', (req, res) => {
 // IMAGE GENERATION ROUTES
 // ==========================================
 
-// Protected image generation
+// Protected image generation (supports multi-image + seed)
 app.post('/api/generate/image', 
   authenticateToken, 
   rateLimitMiddleware, 
   contentModerationMiddleware,
   async (req, res) => {
-    const { prompt, imageBase64, model = 'gemini-2.5-flash-image-preview' } = req.body;
+    const {
+      prompt,
+      images,        // string[] of base64 images
+      imageBase64,   // legacy single-image field (backwards compat)
+      model = 'gemini-2.5-flash-image-preview',
+      seed,
+    } = req.body;
     
     try {
       console.log('🎨 Generating image for user:', req.user.email);
       
-      // Call Gemini API
       const apiKey = process.env.GEMINI_API_KEY;
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       
       const promptParts = [{ text: prompt }];
-      
-      if (imageBase64) {
+
+      // Multi-image support: prefer images[] array, fall back to legacy single image
+      const imageList = images && images.length > 0 ? images : (imageBase64 ? [imageBase64] : []);
+
+      // For legacy model that only supports single image, use first image only
+      const isLegacy = model === 'gemini-2.0-flash-preview-image-generation';
+      const imagesToSend = isLegacy ? imageList.slice(0, 1) : imageList;
+
+      for (const img of imagesToSend) {
         promptParts.push({
-          inlineData: {
-            mimeType: "image/png",
-            data: imageBase64
-          }
+          inlineData: { mimeType: "image/png", data: img }
         });
+      }
+
+      const generationConfig = {
+        temperature: 0.8,
+        candidateCount: 1,
+        responseModalities: ["TEXT", "IMAGE"],
+      };
+      if (seed != null) {
+        generationConfig.seed = seed;
       }
 
       const payload = {
         contents: [{ parts: promptParts }],
-        generationConfig: {
-          temperature: 0.8,
-          candidateCount: 1,
-          responseModalities: ["TEXT", "IMAGE"]
-        }
+        generationConfig,
       };
 
       const apiResponse = await fetch(apiUrl, {
@@ -373,7 +387,6 @@ app.post('/api/generate/image',
 
       const result = await apiResponse.json();
       
-      // Extract image from response
       let imageData = null;
       if (result.candidates?.[0]?.content?.parts) {
         for (const part of result.candidates[0].content.parts) {
@@ -388,10 +401,8 @@ app.post('/api/generate/image',
         throw new Error('No image generated in response');
       }
 
-      // Update user usage
       await updateUserUsage(req.user.userId, 'image');
 
-      // Fetch latest usage to return with response so UI can update immediately
       let latestUsage;
       try {
         latestUsage = await getUserUsage(req.user.userId);
@@ -416,68 +427,98 @@ app.post('/api/generate/image',
   }
 );
 
-// Protected prompt enhancement
-app.post('/api/generate/enhance',
+// Prompt refinement (auto-refine, Q&A questions, apply answers)
+app.post('/api/generate/refine',
   authenticateToken,
   rateLimitMiddleware,
-  contentModerationMiddleware,
   async (req, res) => {
-    const { prompt, referenceImage } = req.body;
+    const { prompt, mode, referenceImages, answers } = req.body;
     
     try {
-      console.log('✨ Enhancing prompt for user:', req.user.email);
+      console.log(`✨ Refine (${mode}) for user:`, req.user.email);
       
       const apiKey = process.env.GEMINI_API_KEY;
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
       
-      let enhancementPrompt = `Enhance this image generation prompt to be more detailed, creative, and likely to produce a high-quality result. Keep it under 200 words and focus on visual details, style, composition, and atmosphere.
+      let systemPrompt;
+
+      if (mode === 'auto') {
+        systemPrompt = `You are a prompt optimizer for an AI image generator. The user wrote a basic prompt. Improve it by adding specific visual details about composition, lighting, colors, and style while preserving the user's core intent. Keep it under 150 words. Do NOT change what the user wants — only add quality-improving details. Output ONLY the improved prompt, nothing else.
+
+User prompt: "${prompt}"`;
+      } else if (mode === 'questions') {
+        systemPrompt = `You are helping a user create a better image generation prompt. Given their prompt, generate exactly 3 short clarifying questions to understand what they want. Each question should have 3-5 concise preset answer options. Return ONLY a valid JSON array, no markdown, no explanation:
+[{"question": "...", "options": ["...", "...", "..."]}]
+
+User prompt: "${prompt}"`;
+      } else if (mode === 'apply') {
+        const answersText = (answers || []).map(a => `- ${a.question}: ${a.answer}`).join('\n');
+        systemPrompt = `Rewrite this image generation prompt incorporating the user's preferences below. Keep the core subject but enhance with the specified preferences. Output ONLY the rewritten prompt, nothing else. Keep under 200 words.
 
 Original prompt: "${prompt}"
+User preferences:
+${answersText}`;
+      } else {
+        return res.status(400).json({ error: 'Invalid refine mode' });
+      }
 
-Enhanced prompt:`;
+      const parts = [{ text: systemPrompt }];
 
-      const promptParts = [{ text: enhancementPrompt }];
-      
-      if (referenceImage) {
-        promptParts.push({
-          inlineData: {
-            mimeType: "image/png",
-            data: referenceImage
-          }
-        });
-        promptParts[0].text += "\n\nAlso consider the reference image provided for style and composition inspiration.";
+      if (referenceImages && referenceImages.length > 0) {
+        for (const img of referenceImages) {
+          parts.push({ inlineData: { mimeType: "image/png", data: img } });
+        }
       }
 
       const payload = {
-        contents: [{ parts: promptParts }],
+        contents: [{ parts }],
         generationConfig: {
-          temperature: 0.7,
-          candidateCount: 1
-        }
+          temperature: mode === 'questions' ? 0.3 : 0.7,
+          candidateCount: 1,
+        },
       };
 
       const apiResponse = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       if (!apiResponse.ok) {
         const errorData = await apiResponse.json();
-        throw new Error(`Gemini API error: ${apiResponse.status}`);
+        throw new Error(`Gemini API error: ${apiResponse.status} - ${JSON.stringify(errorData)}`);
       }
 
       const result = await apiResponse.json();
-      const enhancedPrompt = result.candidates?.[0]?.content?.parts?.[0]?.text || prompt;
+      const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      if (mode === 'questions') {
+        try {
+          // Strip markdown code fences if present
+          const cleaned = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          const questions = JSON.parse(cleaned);
+          // Initialize empty answers
+          const withAnswers = questions.map(q => ({ ...q, answer: '' }));
+          res.json({ questions: withAnswers });
+        } catch (parseError) {
+          console.error('Failed to parse questions JSON:', responseText);
+          res.json({
+            questions: [
+              { question: 'What style do you prefer?', options: ['Photorealistic', 'Digital Art', 'Anime', 'Painterly', 'Minimalist'], answer: '' },
+              { question: 'What mood should the image have?', options: ['Calm', 'Dramatic', 'Mysterious', 'Joyful', 'Epic'], answer: '' },
+              { question: 'Any specific composition details?', options: ['Close-up', 'Wide shot', 'Bird\'s eye', 'Low angle', 'Centered'], answer: '' },
+            ]
+          });
+        }
+      } else {
+        await updateUserUsage(req.user.userId, 'enhancement');
+        res.json({ refinedPrompt: responseText.trim() });
+      }
       
-      // Update user usage
-      await updateUserUsage(req.user.userId, 'enhancement');
-      
-      console.log('✅ Prompt enhanced successfully');
-      res.json({ enhancedPrompt: enhancedPrompt.trim() });
+      console.log(`✅ Refine (${mode}) completed successfully`);
       
     } catch (error) {
-      console.error('❌ Prompt enhancement error:', error);
+      console.error('❌ Refine error:', error);
       res.status(500).json({ error: error.message });
     }
   }
