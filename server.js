@@ -7,16 +7,10 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
-// Strict DB-backed functions (no fallbacks)
-const createUser = async (userData) => {
-  const { createUser: dbCreateUser } = await import('./api/utils/database.js');
-  return await dbCreateUser(userData);
-};
-
-const getUserByEmail = async (email) => {
-  const { getUserByEmail: dbGetUserByEmail } = await import('./api/utils/database.js');
-  return await dbGetUserByEmail(email);
+// DB helpers used by routes
+const getUserById = async (id) => {
+  const { getUserById: dbGetUserById } = await import('./api/utils/database.js');
+  return await dbGetUserById(id);
 };
 
 const updateUserUsage = async (...args) => {
@@ -33,7 +27,11 @@ import { rateLimitMiddleware } from './api/middleware/rateLimit.js';
 import { contentModerationMiddleware } from './api/middleware/contentModeration.js';
 
 // Load environment variables
-dotenv.config({ path: '.env.local' });
+// In development, read from .env.local.
+// In production, rely on real environment variables (no file needed).
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: '.env.local' });
+}
 
 // Ensure DB schema is up to date on startup
 try {
@@ -84,7 +82,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
-      auth: '/api/auth/google',
+      auth: '/api/auth/me (Bearer token = Supabase session)',
       debug: '/api/auth/debug'
     }
   });
@@ -121,32 +119,30 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Auth diagnostics (non-sensitive) - helps verify session quickly
+// Auth diagnostics (non-sensitive) - helps verify Supabase session
 app.get('/api/auth/debug', async (req, res) => {
   try {
-    const cookieToken = req.cookies?.auth_token ? 'present' : 'missing';
     const authHeader = req.headers?.authorization || '';
     const headerToken = authHeader.startsWith('Bearer ') ? 'present' : 'missing';
-
     let decoded = null;
-    try {
-      const raw = req.cookies?.auth_token || (authHeader.startsWith('Bearer ') ? authHeader.substring(7) : undefined);
-      if (raw) {
-        decoded = jwt.verify(raw, process.env.JWT_SECRET);
-      }
-    } catch {}
-
     let dbUser = null;
-    if (decoded?.email) {
+    if (headerToken === 'present' && process.env.SUPABASE_JWT_SECRET) {
       try {
-        dbUser = await getUserByEmail(decoded.email);
-      } catch {}
+        const jwt = await import('jsonwebtoken');
+        const raw = authHeader.substring(7);
+        decoded = jwt.verify(raw, process.env.SUPABASE_JWT_SECRET);
+        const { getOrCreateUserBySupabaseId } = await import('./api/utils/database.js');
+        dbUser = await getOrCreateUserBySupabaseId({
+          supabaseUserId: decoded.sub,
+          email: decoded.email ?? decoded.user_email,
+          name: decoded.user_metadata?.full_name,
+          picture: decoded.user_metadata?.avatar_url,
+        });
+      } catch (_) {}
     }
-
     res.json({
-      cookieToken,
       headerToken,
-      decoded: decoded ? { userId: decoded.userId, email: decoded.email } : null,
+      decoded: decoded ? { sub: decoded.sub, email: decoded.email } : null,
       dbUser: dbUser ? { id: dbUser.id, email: dbUser.email, tier: dbUser.tier } : null
     });
   } catch (e) {
@@ -154,139 +150,13 @@ app.get('/api/auth/debug', async (req, res) => {
   }
 });
 
-// ==========================================
-// AUTH ROUTES
-// ==========================================
-
-// Google OAuth initiation
-app.get('/api/auth/google', (req, res) => {
-  // Check if OAuth credentials are configured
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    console.log('❌ OAuth not configured');
-    return res.status(500).json({ error: 'OAuth not configured' });
-  }
-
-  const redirectUri = `${getApiBaseUrl(req)}/api/auth/callback`;
-  console.log('🔐 OAuth redirect URI:', redirectUri);
-  console.log('🔐 API_BASE_URL env:', process.env.API_BASE_URL || 'NOT SET');
-
-  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    access_type: 'offline',
-    prompt: 'consent'
-  })}`;
-  
-  console.log('🔐 Redirecting to Google OAuth...');
-  res.redirect(googleAuthUrl);
-});
-
-// Google OAuth callback
-app.get('/api/auth/callback', async (req, res) => {
-  const { code } = req.query;
-  
-  if (!code) {
-    const frontend = getFrontendOrigin();
-    return res.redirect(`${frontend}?error=no_code`);
-  }
-
-  // No development bypass; require real OAuth
-
-  try {
-    console.log('🔄 Processing OAuth callback...');
-    
-    const redirectUri = `${getApiBaseUrl(req)}/api/auth/callback`;
-    console.log('🔐 OAuth callback redirect URI:', redirectUri);
-    console.log('🔐 API_BASE_URL env:', process.env.API_BASE_URL || 'NOT SET');
-    
-    // Exchange code for tokens
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri
-      })
-    });
-
-    const tokens = await tokenResponse.json();
-    
-    if (!tokens.access_token) {
-      console.error('❌ Token exchange failed:', tokens);
-      if (tokens.error === 'redirect_uri_mismatch') {
-        console.error('❌ REDIRECT URI MISMATCH!');
-        console.error('   Expected by Google:', tokens.error_description);
-        console.error('   Sent by us:', redirectUri);
-        console.error('   API_BASE_URL:', process.env.API_BASE_URL || 'NOT SET');
-      }
-      throw new Error(`Token exchange failed: ${tokens.error || 'Unknown error'}`);
-    }
-
-    // Get user info from Google
-    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` }
-    });
-    
-    const googleUser = await userResponse.json();
-    
-    // Create or update user in database
-    const user = await createUser({
-      googleId: googleUser.id,
-      email: googleUser.email,
-      name: googleUser.name,
-      picture: googleUser.picture
-    });
-
-    // Generate JWT
-    const jwtToken = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    // Set secure cookie
-    const isProd = (process.env.NODE_ENV === 'production');
-    res.cookie('auth_token', jwtToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      domain: isProd ? '.scopophobic.xyz' : undefined,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/'
-    });
-
-    console.log('✅ User authenticated:', user.email);
-    console.log('🔗 Redirecting with token to frontend...');
-    // Redirect to frontend (in dev include token to ease testing)
-    const frontend = getFrontendOrigin();
-    if (process.env.NODE_ENV === 'production') {
-      res.redirect(`${frontend}?auth_success=true`);
-    } else {
-      res.redirect(`${frontend}?auth_success=true&token=${encodeURIComponent(jwtToken)}`);
-    }
-    
-  } catch (error) {
-    console.error('❌ OAuth callback error:', error);
-    const frontend = getFrontendOrigin();
-    res.redirect(`${frontend}?error=auth_failed`);
-  }
-});
-
-// Get current user
+// Get current user (Supabase JWT in Authorization header)
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
-    console.log('🔍 /api/auth/me called for user:', req.user.email);
-    const user = await getUserByEmail(req.user.email);
+    const user = await getUserById(req.user.userId);
     if (!user) {
-      console.log('❌ User not found by email');
       return res.status(404).json({ error: 'User not found' });
     }
-    
     const usage = await getUserUsage(user.id);
     
     // Map usage to frontend-friendly shape and limits
@@ -315,9 +185,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Logout
+// Logout (session is managed by Supabase on the client; backend has no cookie to clear)
 app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('auth_token');
   res.json({ success: true });
 });
 
