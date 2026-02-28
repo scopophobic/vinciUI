@@ -1,68 +1,56 @@
 /**
  * Express Authentication Middleware
- * Converts the Next.js auth middleware to work with Express
+ * Verifies Supabase JWT and syncs user to our DB (tier/usage).
  */
 
 import jwt from 'jsonwebtoken';
-
-// Fallback getUserById function
-const getUserById = async (userId) => {
-  try {
-    const { getUserById: dbGetUserById } = await import('../utils/database.js');
-    return await dbGetUserById(userId);
-  } catch (error) {
-    console.log('⚠️ Auth middleware - Database getUserById failed:', error.message);
-    // Return null - let the JWT token data be used instead
-    return null;
-  }
-};
+import { getOrCreateUserBySupabaseId } from '../utils/database.js';
 
 export const authenticateToken = async (req, res, next) => {
   try {
-    // Try to get token from cookie first, then from Authorization header
-    let token = req.cookies.auth_token;
-    
-    console.log('🔍 Auth middleware - Cookie token:', !!token);
-    
-    if (!token) {
-      const authHeader = req.headers.authorization;
-      console.log('🔍 Auth middleware - Auth header:', authHeader);
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-        console.log('🔍 Auth middleware - Extracted token:', !!token);
-      }
+    let token = req.cookies?.auth_token;
+    if (!token && req.headers.authorization?.startsWith('Bearer ')) {
+      token = req.headers.authorization.substring(7);
     }
-    
+
     if (!token) {
-      console.log('❌ Auth middleware - No token found');
       return res.status(401).json({ error: 'Authentication required' });
     }
-    
-    console.log('🔍 Auth middleware - Verifying token...');
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('✅ Auth middleware - Token verified, userId:', decoded.userId, 'email:', decoded.email);
-    
-    // Get user from database (required)
-    const user = await getUserById(decoded.userId);
-    console.log('🔍 Auth middleware - User lookup result:', !!user);
-    if (!user) {
-      console.log('❌ Auth middleware - User not found in database');
-      return res.status(401).json({ error: 'Unauthorized' });
+    const secret = process.env.SUPABASE_JWT_SECRET;
+    if (!secret) {
+      console.error('SUPABASE_JWT_SECRET is not set');
+      return res.status(500).json({ error: 'Server auth misconfiguration' });
     }
 
-    // Add user info to request from DB
+    const decoded = jwt.verify(token, secret);
+    const supabaseUserId = decoded.sub;
+    const email = decoded.email ?? decoded.user_email ?? '';
+    const name = decoded.user_metadata?.full_name ?? decoded.user_metadata?.name ?? email || 'User';
+    const picture = decoded.user_metadata?.avatar_url ?? decoded.user_metadata?.picture ?? '';
+
+    const user = await getOrCreateUserBySupabaseId({
+      supabaseUserId,
+      email,
+      name,
+      picture,
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
     req.user = {
       userId: user.id,
       email: user.email,
-      tier: user.tier
+      tier: user.tier,
     };
-
-    console.log('✅ Auth middleware - Success, user:', user.email);
     next();
   } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
     console.error('Auth middleware error:', error);
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
-

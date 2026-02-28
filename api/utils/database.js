@@ -114,14 +114,23 @@ export async function migrateDatabase() {
       ON user_usage (user_id, date);
     `);
 
-    // Ensure users.tier includes new values (can't alter CHECK easily across engines; skip if unavailable)
-    // Safe no-op for most setups.
     try {
       await client.query(`
         ALTER TABLE IF EXISTS users
         ADD COLUMN IF NOT EXISTS tier VARCHAR(50) DEFAULT 'free';
       `);
     } catch {}
+
+    // Supabase Auth: add supabase_user_id, make google_id nullable for Supabase-only users
+    await client.query(`
+      ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS supabase_user_id VARCHAR(255) UNIQUE;
+    `);
+    try {
+      await client.query(`
+        ALTER TABLE users ALTER COLUMN google_id DROP NOT NULL;
+      `);
+    } catch (_) {}
 
     console.log('✅ Database migration check completed');
   } catch (error) {
@@ -204,6 +213,42 @@ export async function getUserByEmail(email) {
     return result.rows[0] || null;
   } catch (error) {
     console.error('Get user by email error:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Get or create user by Supabase Auth id (for Supabase JWT auth)
+export async function getOrCreateUserBySupabaseId({ supabaseUserId, email, name, picture }) {
+  const client = await getPool().connect();
+  try {
+    const existing = await client.query(
+      'SELECT * FROM users WHERE supabase_user_id = $1',
+      [supabaseUserId]
+    );
+    if (existing.rows.length > 0) {
+      await client.query(
+        'UPDATE users SET name = $1, picture = $2, email = $3, updated_at = NOW() WHERE supabase_user_id = $4',
+        [name || existing.rows[0].name, picture || existing.rows[0].picture, email || existing.rows[0].email, supabaseUserId]
+      );
+      const updated = await client.query('SELECT * FROM users WHERE supabase_user_id = $1', [supabaseUserId]);
+      return updated.rows[0];
+    }
+    const inserted = await client.query(
+      `INSERT INTO users (supabase_user_id, email, name, picture, tier)
+       VALUES ($1, $2, $3, $4, 'free')
+       RETURNING *`,
+      [supabaseUserId, email || '', name || 'User', picture || '']
+    );
+    const user = inserted.rows[0];
+    await client.query(
+      'INSERT INTO user_usage (user_id, date) VALUES ($1, CURRENT_DATE) ON CONFLICT (user_id, date) DO NOTHING',
+      [user.id]
+    );
+    return user;
+  } catch (error) {
+    console.error('getOrCreateUserBySupabaseId error:', error);
     throw error;
   } finally {
     client.release();
