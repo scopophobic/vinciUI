@@ -3,10 +3,28 @@ function getApiBase(): string {
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
+let tokenGetter: (() => Promise<string | null>) | null = null;
+
+/** Set by AuthProvider - provides Supabase session access_token for API calls */
+export function setApiTokenGetter(getter: () => Promise<string | null>) {
+  tokenGetter = getter;
+}
+
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (tokenGetter) {
+    const token = await tokenGetter();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+}
+
 async function request<T>(path: string, body: any): Promise<T> {
   const response = await fetch(`${getApiBase()}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await getAuthHeaders(),
     credentials: 'include',
     body: JSON.stringify(body),
   });
@@ -59,31 +77,12 @@ export async function refinePrompt(req: RefineRequest): Promise<RefinePromptResp
 }
 
 export async function fetchUser(): Promise<any> {
-  const apiBase = getApiBase();
-  const token = localStorage.getItem('auth_token');
-  const headers: HeadersInit = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${apiBase}/api/auth/me`, {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${getApiBase()}/api/auth/me`, {
     credentials: 'include',
     headers,
   });
 
   if (!response.ok) return null;
   return response.json();
-}
-
-export async function logout(): Promise<void> {
-  const apiBase = getApiBase();
-  await fetch(`${apiBase}/api/auth/logout`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-  localStorage.removeItem('auth_token');
-}
-
-export function getLoginUrl(): string {
-  return `${getApiBase()}/api/auth/google`;
 }

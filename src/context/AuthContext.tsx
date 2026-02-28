@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import * as api from '../services/api';
 
 export interface User {
@@ -19,8 +21,6 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: () => void;
-  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -39,39 +39,23 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [backendUser, setBackendUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isAuthenticated = !!user;
-
-  // Check authentication status on mount and handle URL token
   useEffect(() => {
-    // Check for auth token in URL (from OAuth callback)
-    const urlParams = new URLSearchParams(window.location.search);
-    const authSuccess = urlParams.get('auth_success');
-    const token = urlParams.get('token');
-    
-    console.log('🔍 Auth check on mount:', { authSuccess, hasToken: !!token, url: window.location.href });
-    
-    if (authSuccess === 'true' && token) {
-      console.log('✅ Found auth token in URL, storing...');
-      // Store token in localStorage for development
-      localStorage.setItem('auth_token', token);
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Check auth status to load user data
-      checkAuthStatus();
-    } else {
-      console.log('🔍 No URL token, checking existing auth...');
-      checkAuthStatus();
-    }
-  }, []);
+    api.setApiTokenGetter(async () => session?.access_token ?? null);
+  }, [session]);
 
-  const checkAuthStatus = async () => {
+  const fetchBackendUser = async () => {
+    if (!session) {
+      setBackendUser(null);
+      return;
+    }
     try {
       const data = await api.fetchUser();
       if (data?.user) {
-        setUser({
+        setBackendUser({
           ...data.user,
           usage: {
             ...data.user.usage,
@@ -79,49 +63,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
           },
         });
       } else {
-        setUser(null);
+        setBackendUser(null);
       }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      setUser(null);
+    } catch {
+      setBackendUser(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = () => {
-    window.location.href = api.getLoginUrl();
-  };
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
 
-  const logout = async () => {
-    try {
-      await api.logout();
-      setUser(null);
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Logout failed:', error);
-      localStorage.removeItem('auth_token');
-      setUser(null);
-      window.location.href = '/';
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setBackendUser(null);
+      setIsLoading(false);
+      return;
     }
-  };
+    setIsLoading(true);
+    fetchBackendUser();
+  }, [session]);
 
   const refreshUser = async () => {
-    await checkAuthStatus();
+    await fetchBackendUser();
   };
+
+  const user: User | null =
+    session && backendUser
+      ? {
+          id: backendUser.id,
+          email: backendUser.email ?? session.user.email ?? '',
+          name: backendUser.name ?? session.user.user_metadata?.full_name ?? session.user.email ?? 'User',
+          picture: backendUser.picture ?? session.user.user_metadata?.avatar_url ?? '',
+          tier: backendUser.tier ?? 'free',
+          usage: backendUser.usage,
+        }
+      : null;
 
   const value: AuthContextType = {
     user,
     isLoading,
-    isAuthenticated,
-    login,
-    logout,
-    refreshUser
+    isAuthenticated: !!user,
+    refreshUser,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
