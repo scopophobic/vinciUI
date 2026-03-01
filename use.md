@@ -17,7 +17,7 @@ VinciUI is a **node-based AI image generation** tool. You build visual pipelines
 | Frontend | React 18, React Flow 11, Tailwind CSS 3, Vite 5 |
 | Backend | Express 5 (ESM), Node.js |
 | Database | PostgreSQL (AWS RDS) |
-| Auth | Google OAuth 2.0, JWT (7-day tokens), cookie + header auth |
+| Auth | Supabase Auth (email/password + Google OAuth via Supabase), JWT verified by backend |
 | AI | Google Gemini API (2.5 Flash, 2.0 Flash Legacy) |
 | Deployment | Vercel (frontend), AWS EC2 (backend), AWS RDS (database) |
 
@@ -48,11 +48,14 @@ vinciUI/
 │   ├── components/
 │   │   ├── LandingPage.tsx          # Public landing page
 │   │   └── Auth/
-│   │       ├── LoginPage.tsx        # Google OAuth sign-in page
-│   │       └── UserProfile.tsx      # User avatar, tier badge, usage stats, logout
+│   │       ├── LoginPage.tsx        # Supabase sign-in (email/password + Google OAuth)
+│   │       └── UserProfile.tsx      # User avatar, tier badge, usage stats, sign out
+│   │
+│   ├── lib/
+│   │   └── supabase.ts              # Supabase client (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
 │   │
 │   ├── context/
-│   │   └── AuthContext.tsx           # Auth state provider (user, login, logout, refresh)
+│   │   └── AuthContext.tsx           # Auth state (Supabase session + backend user tier/usage)
 │   │
 │   ├── services/
 │   │   └── api.ts                   # Centralized API client (generateImage, refinePrompt, auth)
@@ -62,7 +65,7 @@ vinciUI/
 │
 ├── api/
 │   ├── middleware/
-│   │   ├── auth.js                  # JWT verification middleware
+│   │   ├── auth.js                  # Supabase JWT verification + sync user to DB
 │   │   ├── rateLimit.js             # Per-tier rate limiting middleware
 │   │   └── contentModeration.js     # Keyword/pattern content filter
 │   │
@@ -82,10 +85,9 @@ vinciUI/
 
 - **Node.js** v16+
 - **npm**
-- **PostgreSQL** database (local or hosted -- AWS RDS, Supabase, Neon, etc.)
-- **Google Cloud project** with:
-  - OAuth 2.0 Client ID & Secret (for authentication)
-  - Gemini API key (for image generation -- Tier 1 or above for Gemini 2.5 Flash)
+- **PostgreSQL** database (e.g. Supabase Postgres for DB + Auth)
+- **Supabase project** (for Auth and optionally DB)
+- **Google Gemini API key** (for image generation; Tier 1+ for Gemini 2.5 Flash)
 
 ### 1. Install Dependencies
 
@@ -94,37 +96,74 @@ cd vinciUI
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure Environment Variables (Dev vs Production)
 
-Create a `.env.local` file in the project root:
+VinciUI is set up so you **never need to edit env values when switching between development and production**:
+
+- **Local development** uses a `.env.local` file (loaded only when `NODE_ENV !== 'production'`).  
+- **Production** reads real environment variables from the host (Vercel, EC2, Render, etc.) and **does not** read `.env.local`.
+
+#### 2.1 Local Development (`.env.local`)
+
+Create a `.env.local` file in the project root **for development only**:
 
 ```env
 # --- Frontend (VITE_ prefix exposes to browser) ---
-VITE_GEMINI_API_KEY=your_gemini_api_key
-VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_GEMINI_API_KEY=your_dev_gemini_key
 VITE_API_URL=http://localhost:3001
 
 # --- Backend (server-side only) ---
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GEMINI_API_KEY=your_gemini_api_key
-JWT_SECRET=any_random_secret_string
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret
+GEMINI_API_KEY=your_dev_gemini_key
+
+# Local URLs for dev
 API_BASE_URL=http://localhost:3001
 FRONTEND_ORIGIN=http://localhost:5173
-
-# --- Optional ---
-NODE_ENV=development
 ```
 
-**Where to get these:**
+> **Note:** Do **not** set `NODE_ENV` in `.env.local`. Vite will manage its own mode; the backend checks `process.env.NODE_ENV !== 'production'` to decide whether to load `.env.local`.
+
+#### 2.2 Production (Vercel + Backend Host)
+
+In production you configure **environment variables in the hosting dashboards**, not in `.env.local`:
+
+- **Frontend (Vercel) env vars:**
+  - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+  - `VITE_GEMINI_API_KEY`
+  - `VITE_API_URL` → e.g. `https://your-backend-domain.com`
+
+- **Backend (EC2 / Render / other) env vars:**
+  - `DATABASE_URL` → production Postgres (e.g. Supabase connection string)
+  - `SUPABASE_JWT_SECRET` → from Supabase Project Settings → API → JWT Secret
+  - `GEMINI_API_KEY` → production Gemini key
+  - `API_BASE_URL` → e.g. `https://your-backend-domain.com`
+  - `FRONTEND_ORIGIN` → e.g. `https://vinciui.vercel.app`
+  - `NODE_ENV=production`
+
+The backend now behaves like this:
+
+- If `NODE_ENV === 'production'` → **does not read `.env.local`**, only real env vars.  
+- If `NODE_ENV !== 'production'` → loads `.env.local` for convenient local dev.
+
+#### 2.3 Supabase setup (required for auth)
+
+1. **Create a project** at [supabase.com](https://supabase.com) → New project.
+2. **Get URL and anon key:** Project Settings → API → Project URL and `anon` `public` key. Put them in `.env.local` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+3. **Get JWT secret:** Project Settings → API → JWT Settings → JWT Secret. Put it in `.env.local` as `SUPABASE_JWT_SECRET` (backend only; never expose this in the frontend).
+4. **Database:** Use the same Supabase project’s Postgres (or a separate DB). Connection string: Project Settings → Database → Connection string (URI). Use this as `DATABASE_URL` for the backend.
+5. **Redirect URL for OAuth (e.g. Google):** Authentication → URL Configuration → Redirect URLs. Add `http://localhost:5173` for dev and `https://your-production-domain.com` for production. Supabase will redirect here after sign-in.
+6. **Enable providers:** Authentication → Providers → enable Email and optionally Google (follow Supabase docs to add Google OAuth credentials).
+
+#### 2.4 Where to get other variables
 
 | Variable | Source |
 |----------|--------|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) -- create an API key |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) -- create OAuth 2.0 Client ID, set authorized redirect URI to `http://localhost:3001/api/auth/callback` |
-| `DATABASE_URL` | Your PostgreSQL connection string |
-| `JWT_SECRET` | Any random string (e.g. `openssl rand -base64 32`) |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `DATABASE_URL` | Supabase Dashboard → Settings → Database → Connection string (or any Postgres URI) |
+| `SUPABASE_JWT_SECRET` | Supabase Dashboard → Settings → API → JWT Secret |
 
 ### 3. Start Development
 
@@ -152,13 +191,13 @@ npm run dev
 
 The database tables are auto-created on server startup via `migrateDatabase()`. No manual SQL needed. Tables created:
 
-- **`users`** -- id, google_id, email, name, picture, tier, timestamps
+- **`users`** -- id, supabase_user_id (or google_id for legacy), email, name, picture, tier, timestamps
 - **`user_usage`** -- per-user-per-day generation and enhancement counts
 - **`moderation_logs`** -- blocked/flagged prompt history
 
 ### 5. Open the App
 
-Go to `http://localhost:5173`. You'll see the landing page. Click "Enter Workshop", then sign in with Google.
+Go to `http://localhost:5173`. You'll see the landing page. Click "Enter Workshop", then sign in with email/password or "Continue with Google" (if enabled in Supabase).
 
 ### 6. Build for Production
 
@@ -324,16 +363,14 @@ All endpoints are on the backend (`http://localhost:3001` in dev).
 |--------|------|-------------|
 | GET | `/` | Health info, lists available endpoints |
 | GET | `/api/health` | Server + database connectivity check |
-| GET | `/api/auth/debug` | Auth diagnostics (cookie/header token presence, decoded JWT, DB user tier) |
-| GET | `/api/auth/google` | Initiates Google OAuth flow (redirects to Google) |
-| GET | `/api/auth/callback` | OAuth callback -- exchanges code for token, creates/updates user, sets JWT cookie |
+| GET | `/api/auth/debug` | Auth diagnostics (Bearer token = Supabase JWT, decoded sub/email, DB user tier) |
 
-### Authenticated (require JWT)
+### Authenticated (Bearer token = Supabase session access_token)
 
 | Method | Path | Middleware | Description |
 |--------|------|------------|-------------|
-| GET | `/api/auth/me` | `authenticateToken` | Returns current user info + usage stats |
-| POST | `/api/auth/logout` | -- | Clears auth cookie |
+| GET | `/api/auth/me` | `authenticateToken` | Returns current user info + usage stats (syncs Supabase user to DB) |
+| POST | `/api/auth/logout` | -- | No-op (client signs out via Supabase) |
 | POST | `/api/generate/image` | `authenticateToken`, `rateLimitMiddleware`, `contentModerationMiddleware` | Generate an image with Gemini |
 | POST | `/api/generate/refine` | `authenticateToken`, `rateLimitMiddleware` | Refine a prompt (3 modes) |
 
@@ -383,17 +420,14 @@ All modes accept optional `referenceImages` array for context.
 
 ---
 
-## Authentication Flow
+## Authentication Flow (Supabase)
 
-1. User clicks "Continue with Google" on the login page.
-2. Frontend redirects to `GET /api/auth/google`.
-3. Server redirects to Google's OAuth consent screen.
-4. After consent, Google redirects to `GET /api/auth/callback?code=...`.
-5. Server exchanges the code for an access token, fetches user info from Google.
-6. Server creates/updates the user in PostgreSQL (new users get `tier: 'free'`).
-7. Server generates a JWT (7-day expiry), sets it as an `httpOnly` cookie.
-8. In development, the JWT is also passed as a URL parameter (`?auth_success=true&token=...`) for easier testing. The frontend stores it in `localStorage`.
-9. Subsequent API calls authenticate via cookie or `Authorization: Bearer <token>` header.
+1. User signs in on the login page (email/password or "Continue with Google" via Supabase).
+2. Supabase Auth returns a session; the frontend stores it (Supabase client handles persistence).
+3. The frontend sends the Supabase session **access_token** in the `Authorization: Bearer <token>` header on every request to the backend.
+4. Backend `authenticateToken` middleware verifies the JWT using `SUPABASE_JWT_SECRET`, reads `sub` (Supabase user id) and optional `email` / `user_metadata`.
+5. Backend finds or creates a row in `users` by `supabase_user_id` and attaches `req.user` (our DB user id, email, tier).
+6. Protected routes use `req.user` for rate limits and usage.
 
 ---
 
@@ -416,10 +450,11 @@ Blocked requests return a `400` with `code: "PROHIBITED_CONTENT"` or `code: "SUS
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID | Primary key, auto-generated |
-| google_id | VARCHAR(255) | Unique, from Google OAuth |
+| supabase_user_id | VARCHAR(255) | Unique, from Supabase Auth JWT `sub` |
+| google_id | VARCHAR(255) | Optional, legacy Google OAuth |
 | email | VARCHAR(255) | Unique |
 | name | VARCHAR(255) | Display name |
-| picture | TEXT | Google profile picture URL |
+| picture | TEXT | Profile picture URL |
 | tier | VARCHAR(50) | `free`, `premium`, `tester`, or `developer` |
 | created_at | TIMESTAMPTZ | Auto |
 | updated_at | TIMESTAMPTZ | Auto |
