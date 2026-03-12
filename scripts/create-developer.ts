@@ -5,6 +5,9 @@
  * Usage: npx tsx scripts/create-developer.ts your-email@gmail.com
  */
 
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+
 import { pool } from '../api/utils/database.js';
 
 async function promoteUserToDeveloper(email: string) {

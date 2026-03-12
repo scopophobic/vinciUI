@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  vinci-api:
+    build: .
+    container_name: vinci-api
+    restart: always
+    # Expose the API on host port 3001
+    ports:
+      - "3001:3001"
+    # Load environment from your existing .env.local
+    env_file:
+      - .env.local
+    networks:
+      - web
+
+networks:
+  # Shared network for reverse proxy + multiple project APIs
+  web:
+    external: true
+
