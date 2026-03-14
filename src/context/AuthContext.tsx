@@ -55,7 +55,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     if (authSuccess === 'true' && token) {
       console.log('✅ Found auth token in URL, storing...');
-      // Store token in localStorage for development
       localStorage.setItem('auth_token', token);
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);

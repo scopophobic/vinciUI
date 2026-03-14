@@ -271,13 +271,10 @@ app.get('/api/auth/callback', async (req, res) => {
 
     console.log('✅ User authenticated:', user.email);
     console.log('🔗 Redirecting with token to frontend...');
-    // Redirect to frontend (in dev include token to ease testing)
+    // Always include token in redirect so frontend can store it and send Authorization header.
+    // This avoids 401 when frontend is on a different origin (e.g. Vercel) where the cookie is not sent.
     const frontend = getFrontendOrigin();
-    if (process.env.NODE_ENV === 'production') {
-      res.redirect(`${frontend}?auth_success=true`);
-    } else {
-      res.redirect(`${frontend}?auth_success=true&token=${encodeURIComponent(jwtToken)}`);
-    }
+    res.redirect(`${frontend}?auth_success=true&token=${encodeURIComponent(jwtToken)}`);
     
   } catch (error) {
     console.error('❌ OAuth callback error:', error);
