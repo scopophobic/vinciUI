@@ -205,10 +205,13 @@ app.get('/api/auth/callback', async (req, res) => {
 
   try {
     console.log('🔄 Processing OAuth callback...');
-    
-    const redirectUri = `${getApiBaseUrl(req)}/api/auth/callback`;
+    const baseUrl = getApiBaseUrl(req);
+    const redirectUri = `${baseUrl.replace(/\/$/, '')}/api/auth/callback`;
     console.log('🔐 OAuth callback redirect URI:', redirectUri);
     console.log('🔐 API_BASE_URL env:', process.env.API_BASE_URL || 'NOT SET');
+    if (process.env.NODE_ENV === 'production' && !process.env.API_BASE_URL) {
+      console.warn('⚠️ API_BASE_URL not set in production; using request-derived URL. Set API_BASE_URL=https://api.vinci.scopophobic.xyz to avoid redirect_uri mismatch.');
+    }
     
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -277,7 +280,8 @@ app.get('/api/auth/callback', async (req, res) => {
     res.redirect(`${frontend}?auth_success=true&token=${encodeURIComponent(jwtToken)}`);
     
   } catch (error) {
-    console.error('❌ OAuth callback error:', error);
+    console.error('❌ OAuth callback error:', error?.message || error);
+    if (error?.stack) console.error(error.stack);
     const frontend = getFrontendOrigin();
     res.redirect(`${frontend}?error=auth_failed`);
   }
