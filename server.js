@@ -90,22 +90,31 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check with DB connectivity test
+// Health check with DB connectivity test (uses fresh connection, not cached pool)
 app.get('/api/health', async (req, res) => {
   try {
-    // Quick DB connectivity check
     let dbStatus = 'unknown';
-    try {
-      const { getPool } = await import('./api/utils/database.js');
-      const pool = getPool();
-      await pool.query('SELECT 1');
-      dbStatus = 'connected';
-    } catch (dbError) {
-      dbStatus = 'disconnected';
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+      try {
+        const { Pool } = await import('pg');
+        const testPool = new Pool({
+          connectionString: databaseUrl,
+          ssl: databaseUrl.includes('supabase') || databaseUrl.includes('pooler')
+            ? { rejectUnauthorized: false }
+            : false,
+        });
+        await testPool.query('SELECT 1');
+        await testPool.end();
+        dbStatus = 'connected';
+      } catch (dbError) {
+        dbStatus = 'disconnected';
+        console.warn('[health] DB check failed:', dbError?.message || dbError);
+      }
     }
 
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       message: 'VinciUI Backend is running!',
       timestamp: new Date().toISOString(),
       database: dbStatus,
@@ -113,10 +122,10 @@ app.get('/api/health', async (req, res) => {
       port: PORT
     });
   } catch (error) {
-    res.status(500).json({ 
-      status: 'error', 
+    res.status(500).json({
+      status: 'error',
       message: 'Health check failed',
-      error: error.message 
+      error: error.message
     });
   }
 });
