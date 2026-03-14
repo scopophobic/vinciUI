@@ -1,5 +1,15 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useLayoutEffect, ReactNode } from 'react';
 import * as api from '../services/api';
+
+function getAuthParamsFromUrl(): { authSuccess: string | null; token: string | null } {
+  const hash = window.location.hash.slice(1);
+  const search = window.location.search.slice(1);
+  const params = new URLSearchParams(hash || search);
+  return {
+    authSuccess: params.get('auth_success'),
+    token: params.get('token'),
+  };
+}
 
 export interface User {
   id: string;
@@ -44,23 +54,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const isAuthenticated = !!user;
 
-  // Check authentication status on mount and handle URL token
-  useEffect(() => {
-    // Check for auth token in URL (from OAuth callback)
-    const urlParams = new URLSearchParams(window.location.search);
-    const authSuccess = urlParams.get('auth_success');
-    const token = urlParams.get('token');
-    
-    console.log('🔍 Auth check on mount:', { authSuccess, hasToken: !!token, url: window.location.href });
-    
+  // Run as early as possible so we capture token before any redirect/navigation can strip it
+  useLayoutEffect(() => {
+    const { authSuccess, token } = getAuthParamsFromUrl();
+    console.log('🔍 Auth check on mount:', { authSuccess, hasToken: !!token, hasHash: !!window.location.hash, hasSearch: !!window.location.search });
+
     if (authSuccess === 'true' && token) {
-      console.log('✅ Found auth token in URL, storing...');
-      localStorage.setItem('auth_token', token);
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Check auth status to load user data
+      console.log('✅ Found auth token in URL, storing in localStorage...');
+      try {
+        localStorage.setItem('auth_token', token);
+      } catch (e) {
+        console.error('Failed to store token in localStorage:', e);
+      }
+      // Remove hash and query from URL so token is not visible in address bar
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
       checkAuthStatus();
     } else {
+      if (window.location.hash || window.location.search) {
+        // Clean error params from URL without storing
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
       console.log('🔍 No URL token, checking existing auth...');
       checkAuthStatus();
     }
