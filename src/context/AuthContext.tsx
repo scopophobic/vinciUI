@@ -1,13 +1,14 @@
 import { createContext, useContext, useState, useLayoutEffect, ReactNode } from 'react';
 import * as api from '../services/api';
 
-function getAuthParamsFromUrl(): { authSuccess: string | null; token: string | null } {
+function getAuthParamsFromUrl(): { authSuccess: string | null; token: string | null; error: string | null } {
   const hash = window.location.hash.slice(1);
   const search = window.location.search.slice(1);
   const params = new URLSearchParams(hash || search);
   return {
     authSuccess: params.get('auth_success'),
     token: params.get('token'),
+    error: params.get('error'),
   };
 }
 
@@ -29,6 +30,8 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  loginError: string | null;
+  clearLoginError: () => void;
   login: () => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -51,28 +54,31 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const isAuthenticated = !!user;
 
   // Run as early as possible so we capture token before any redirect/navigation can strip it
   useLayoutEffect(() => {
-    const { authSuccess, token } = getAuthParamsFromUrl();
-    console.log('🔍 Auth check on mount:', { authSuccess, hasToken: !!token, hasHash: !!window.location.hash, hasSearch: !!window.location.search });
+    const { authSuccess, token, error } = getAuthParamsFromUrl();
+    console.log('🔍 Auth check on mount:', { authSuccess, hasToken: !!token, error, hasHash: !!window.location.hash, hasSearch: !!window.location.search });
 
     if (authSuccess === 'true' && token) {
       console.log('✅ Found auth token in URL, storing in localStorage...');
+      setLoginError(null);
       try {
         localStorage.setItem('auth_token', token);
       } catch (e) {
         console.error('Failed to store token in localStorage:', e);
       }
-      // Remove hash and query from URL so token is not visible in address bar
       const cleanUrl = window.location.origin + window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
       checkAuthStatus();
     } else {
+      if (error === 'auth_failed' || error === 'no_code') {
+        setLoginError(error === 'no_code' ? 'no_code' : 'auth_failed');
+      }
       if (window.location.hash || window.location.search) {
-        // Clean error params from URL without storing
         const cleanUrl = window.location.origin + window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
       }
@@ -80,6 +86,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       checkAuthStatus();
     }
   }, []);
+
+  const clearLoginError = () => setLoginError(null);
 
   const checkAuthStatus = async () => {
     try {
@@ -128,6 +136,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isLoading,
     isAuthenticated,
+    loginError,
+    clearLoginError,
     login,
     logout,
     refreshUser

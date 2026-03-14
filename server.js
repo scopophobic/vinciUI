@@ -37,10 +37,12 @@ dotenv.config({ path: '.env.local' });
 
 // Ensure DB schema is up to date on startup
 try {
-  const { migrateDatabase } = await import('./api/utils/database.js');
-  await migrateDatabase();
+  const db = await import('./api/utils/database.js');
+  await db.migrateDatabase();
 } catch (e) {
   console.log('⚠️ Skipping DB migration on startup:', e?.message || e);
+  const { resetPool } = await import('./api/utils/database.js');
+  resetPool();
 }
 
 const app = express();
@@ -198,7 +200,7 @@ app.get('/api/auth/callback', async (req, res) => {
   
   if (!code) {
     const frontend = getFrontendOrigin();
-    return res.redirect(`${frontend}?error=no_code`);
+    return res.redirect(`${frontend}#error=no_code`);
   }
 
   // No development bypass; require real OAuth
@@ -283,7 +285,7 @@ app.get('/api/auth/callback', async (req, res) => {
     console.error('❌ OAuth callback error:', error?.message || error);
     if (error?.stack) console.error(error.stack);
     const frontend = getFrontendOrigin();
-    res.redirect(`${frontend}?error=auth_failed`);
+    res.redirect(`${frontend}#error=auth_failed`);
   }
 });
 

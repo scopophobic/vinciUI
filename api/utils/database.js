@@ -16,23 +16,25 @@ function getPool() {
       throw new Error('DATABASE_URL environment variable is not set');
     }
     
-    // Parse DATABASE_URL manually to avoid connection string issues
-    const dbUrl = new URL(databaseUrl);
-    
+    const isSupabase = databaseUrl.includes('supabase') || databaseUrl.includes('pooler');
     pool = new Pool({
-      host: dbUrl.hostname,
-      port: parseInt(dbUrl.port) || 5432,
-      database: dbUrl.pathname.slice(1), // Remove leading slash
-      user: dbUrl.username,
-      password: dbUrl.password,
-      ssl: { rejectUnauthorized: false, require: true }, // Force SSL but ignore cert validation
+      connectionString: databaseUrl,
+      ssl: isSupabase ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 10000,
     });
   }
   
   return pool;
+}
+
+/** Call after failed migration so the next request gets a fresh pool (e.g. after fixing .env). */
+export function resetPool() {
+  if (pool) {
+    try { pool.end(); } catch (_) {}
+    pool = null;
+  }
 }
 
 // Initialize database tables

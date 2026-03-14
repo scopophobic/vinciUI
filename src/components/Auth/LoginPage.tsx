@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginError, clearLoginError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogleLogin = () => {
+    clearLoginError();
     setIsLoading(true);
     login();
   };
@@ -47,6 +48,33 @@ export function LoginPage() {
               Sign in to access your creative workspace
             </p>
           </div>
+
+          {/* Login error + troubleshooting */}
+          {loginError && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-left">
+              <p className="text-sm font-medium text-amber-800 mb-2">
+                {loginError === 'no_code' ? 'Google did not return an authorization code.' : 'Login failed. The server could not complete sign-in.'}
+              </p>
+              <p className="text-xs text-amber-700 mb-2">
+                If you run the backend yourself, check server logs for the exact error:
+              </p>
+              <code className="block text-xs bg-amber-100/80 p-2 rounded mb-2 break-all">
+                docker-compose logs vinci-api
+              </code>
+              <ul className="text-xs text-amber-700 list-disc list-inside space-y-1 mb-2">
+                <li>Set <code className="bg-amber-100/80 px-1 rounded">API_BASE_URL</code> to your API URL (e.g. https://api.vinci.scopophobic.xyz)</li>
+                <li>In Google Cloud Console, add this exact redirect URI: <code className="bg-amber-100/80 px-1 rounded break-all">https://api.vinci.scopophobic.xyz/api/auth/callback</code></li>
+                <li>Restart the API container after changing <code className="bg-amber-100/80 px-1 rounded">.env.local</code></li>
+              </ul>
+              <button
+                type="button"
+                onClick={clearLoginError}
+                className="text-xs font-medium text-amber-800 underline hover:no-underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* Google Login Button */}
           <button
