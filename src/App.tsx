@@ -181,16 +181,22 @@ function WorkshopApp() {
       return;
     }
 
-    updateNodeData(generatorNode.id, { isGenerating: true });
-
     try {
       const { prompt, images } = resolveGeneratorInputs(generatorNode.id);
 
-      if (!prompt.trim()) {
-        alert('Please connect a prompt node with text!');
-        updateNodeData(generatorNode.id, { isGenerating: false });
+      if (!prompt) {
+        alert(
+          'Please connect a prompt node to the blue input on the left of the generator.'
+        );
         return;
       }
+
+      if (!prompt.trim()) {
+        alert('Your connected prompt node has no text. Please add some text.');
+        return;
+      }
+
+      updateNodeData(generatorNode.id, { isGenerating: true });
 
       let actualPrompt = prompt;
 
@@ -297,7 +303,6 @@ function WorkshopApp() {
         ]);
       }
 
-      await refreshUser();
     } catch (error) {
       console.error('Generation failed:', error);
       alert('Generation failed. Please try again.');
